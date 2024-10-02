@@ -266,7 +266,7 @@ def upload_page():
         with st.spinner('Generating notes...'):
             try:
                 # Pass the context to notes_agent
-                pdf_path, markdown_result = notes_agent(st.session_state.transcript, context)
+                markdown_result = notes_agent(st.session_state.transcript, context)
                 st.success('Notes generated successfully')
             except Exception as e:
                 st.error(f'Error generating notes: {e}')

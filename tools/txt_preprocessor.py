@@ -72,7 +72,7 @@ def json_to_markdown(data: dict) -> str:
     # Action Items
     if "action_items" in data:
         markdown.append("## Action Items\n")
-        for item in data["action_items"]:
+        for item in data["action_items"]["action_items"]:
             markdown.append(f"- **Description:** {item['description']}")
             markdown.append(f"  - **Responsible Party:** {item['responsible_party']}")
             if item['deadline']:
@@ -90,9 +90,9 @@ def json_to_markdown(data: dict) -> str:
         markdown.append("")
 
     # Potential Priorities
-    if "potential_priorities" in data:
+    if "potential_priorities" in data["potential_priorities"]:
         markdown.append("## Potential Priorities\n")
-        for priority in data["potential_priorities"]:
+        for priority in data["potential_priorities"]["potential_priorities"]:
             markdown.append(f"- **Priority Level:** {priority['priority_level']}")
             markdown.append(f"  - **Description:** {priority['description']}")
             if "related_action_items" in priority and priority["related_action_items"]:

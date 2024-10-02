@@ -1,9 +1,9 @@
 from pydantic import BaseModel
-from agents import ASSISTANT, REVIEWER
+from agents import ASSISTANT, REVIEWER, ACTION_ITEMS, SENTIMENT_ANALYSIS, CONVERSATION_SUMMARY, PRIORITIZE
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from agents.structure import MeetingAnalysis, ConversationSummary
+from agents.structure import MeetingAnalysis, ConversationSummary, SentimentAnalysis, PotentialPriority, ActionItems, Priorities
 from tools.txt_preprocessor import json_to_markdown
 import datetime
 import streamlit as st
@@ -39,42 +39,50 @@ def task_breakdown(_message: dict,
     return chain.invoke(_message)
 
 
-# def notes_agent(file_path='../test_transcript.txt'):
-
-
 def notes_agent(transcript_, background=''):
     try:
         # Sample transcript from text file
-        # transcript_ = identify_speakers(transcript_)
         today = datetime.date.today().strftime("%Y-%m-%d")
         transcript_ = f"Today's Date: {today}\n" + transcript_
-        # statistics = stats.analyze_transcript(transcript_)
-        # statistics = {"Speaker Turns": 'WIP', "Word Cloud": 'WIP', "Concurrence Analysis": 'WIP'}
-        result = task_breakdown({"transcript": f"{transcript_}", "background": f"{background}"},
-                                ["transcript", "background"])
-
-        reviewed = task_breakdown({"transcript": f"{transcript_}",
-                                   "output": f"{str(result)}"},
-                                  ["transcript", "output"],
-                                  prompt=REVIEWER)
-
-        summary = task_breakdown({"transcript": f"{transcript_}", "background": f"{background}"},
+        summary = task_breakdown({"transcript": f"{transcript_}",
+                                  "background": f"{background}"},
                                  ["transcript", "background"],
-                                 pydantic_style=ConversationSummary)
-        reviewed['conversation_summary'] = summary
-        markdown_result = json_to_markdown(reviewed) #, statistics)
+                                 pydantic_style=ConversationSummary,
+                                 prompt=CONVERSATION_SUMMARY)
 
-        # with open(DATA_DIR / 'notes.md', 'w') as file:
-        #     file.write(markdown_result)
-        # pdf_path = markdown_to_pdf(markdown_result)
-        pdf_path = "WIP"
-        return pdf_path, markdown_result
+        action_items = task_breakdown({"transcript": f"{transcript_}",
+                                       "background": f"{background}"},
+                                      ["transcript", "background"],
+                                      pydantic_style=ActionItems,
+                                      prompt=ACTION_ITEMS)
+
+        sentiment_analysis = task_breakdown({"transcript": f"{transcript_}",
+                                             "background": f"{background}"},
+                                            ["transcript", "background"],
+                                            pydantic_style=SentimentAnalysis,
+                                            prompt=SENTIMENT_ANALYSIS)
+
+        potential_priorities = task_breakdown({"transcript": f"{transcript_}",
+                                    "background": f"{background}"},
+                                    ["transcript", "background"],
+                                    pydantic_style=Priorities,
+                                    prompt=PRIORITIZE)
+
+        results = {"action_items": action_items,
+                   "sentiment_analysis": sentiment_analysis,
+                   "conversation_summary": summary,
+                   "potential_priorities": potential_priorities}
+
+        markdown_result = json_to_markdown(results)
+        return markdown_result
 
     except Exception as e:
         print(f"Error processing file: {e}")
         return None
 
 
-# if __name__ == '__main__':
-#     path = r'C:\Users\cmazz\PycharmProjects\Moso_app\test_transcript.txt'
-#     notes_agent(path)
+if __name__ == '__main__':
+    path = r'C:\Users\cmazz\PycharmProjects\transcriber_machine\documents\upinder_transcript.txt'
+    with open(path, 'r') as file:
+        transcript = file.read()
+    print(notes_agent(transcript))

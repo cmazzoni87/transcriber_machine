@@ -5,7 +5,7 @@ import datetime
 today = datetime.date.today().strftime("%Y-%m-%d")
 
 
-class ActionItem(BaseModel):
+class ActionItems(BaseModel):
     description: str = Field(description="Brief description of the action item")
     responsible_party: str = Field(description="Person responsible for the task")
     deadline: Optional[str] = Field(None, description=f"Deadline or follow-up date for the action item, if any, cannot be before {today}")
@@ -47,8 +47,12 @@ class PotentialPriority(BaseModel):
     strategic_importance: str = Field(description="Why this priority is important for achieving the meeting's goals")
 
 
+class Priorities(BaseModel):
+    potential_priorities: List[PotentialPriority] = Field(description="Organized potential priorities to be addressed")
+
+
 class MeetingAnalysis(BaseModel):
-    action_items: List[ActionItem] = Field(description="List of action items extracted from the meeting")
+    action_items: List[ActionItems] = Field(description="List of action items extracted from the meeting")
     sentiment_analysis: SentimentAnalysis = Field(description="Analysis of sentiment throughout the conversation")
     # conversation_summary: List[ConversationSummary] = Field(description="Summary of the meeting")
     potential_priorities: List[PotentialPriority] = Field(description="Organized potential priorities to be addressed")
