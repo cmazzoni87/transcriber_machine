@@ -81,8 +81,8 @@ def notes_agent(transcript_, background=''):
         return None
 
 
-if __name__ == '__main__':
-    path = r'C:\Users\cmazz\PycharmProjects\transcriber_machine\documents\upinder_transcript.txt'
-    with open(path, 'r') as file:
-        transcript = file.read()
-    print(notes_agent(transcript))
+# if __name__ == '__main__':
+#     path = r'C:\Users\cmazz\PycharmProjects\transcriber_machine\documents\upinder_transcript.txt'
+#     with open(path, 'r') as file:
+#         transcript = file.read()
+#     print(notes_agent(transcript))
