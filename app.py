@@ -6,12 +6,12 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from cryptography.fernet import Fernet
-# from dotenv import load_dotenv
 from tools.diarization import process_audio
+from tools.txt_preprocessor import extract_speakers
 from agents.agent import notes_agent
 # from tools.emailer import send_email_with_mailgun
 # from tools.stats import analyze_transcript  # Assuming you have this module
-
+# from dotenv import load_dotenv
 # Load environment variables
 # load_dotenv()
 
@@ -253,6 +253,7 @@ def upload_page():
                     st.session_state.transcript,
                     st.session_state.name_mapping
                 )
+                speaker_names = extract_speakers(st.session_state.transcript)
                 st.session_state.names_confirmed = True
                 st.rerun()
 

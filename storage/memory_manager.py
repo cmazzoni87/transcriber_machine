@@ -2,6 +2,7 @@ import os
 import uuid
 import datetime
 import lancedb
+import re
 from dotenv import load_dotenv
 from typing import List, Dict, Optional, Literal, Type
 from lancedb.embeddings import EmbeddingFunctionRegistry, get_registry
@@ -9,6 +10,8 @@ from lancedb.pydantic import Vector, LanceModel
 from lancedb.table import Table
 from lancedb.rerankers import LinearCombinationReranker, ColbertReranker, CohereReranker
 from openai import OpenAI
+from tools.txt_preprocessor import split_transcript, extract_speakers
+
 
 client = OpenAI()
 load_dotenv()
@@ -123,11 +126,11 @@ def table_search(query: str,
 
 
 def notes_to_table(document: str,
-                    session_name: str,
-                    thread_id: str | None,
-                    entities: str,
-                    image_tags: str,
-                    bit_map_object: str):
+                   session_name: str,
+                   thread_id: str | None,
+                   entities: str,
+                   image_tags: str,
+                   bit_map_object: str):
 
     time_stamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     session_id = f'{session_name}_{time_stamp}'
@@ -151,22 +154,25 @@ def notes_to_table(document: str,
 
 def transcript_to_table(transcript: str,
                         session_name: str,
-                        thread_id: str | None,
-                        entities: str):
-    ### TBD THIS WILL REQUIRE MULTIPLE LAYERS OF CHUNKING BY SPEAKER AND THE LENGTH OF THE SPEECH ###
+                        thread_id: str | None):
+
     time_stamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     session_id = f'{session_name}_{time_stamp}'
     vectorstore = VectorStoreManager('captain_logs')
-
-    response = client.embeddings.create(
-        input=transcript,
-        model="text-embedding-3-small"
-    )
-    embedded = response.data[0].embedding
-    payload = {"session_id": session_id,
-               "thread_id": thread_id,
-               "text": transcript,
-               "vector": embedded,
-               "entities": entities
-               }
-    return vectorstore.db.create_table("transcripts", exist_ok=True, data=[payload], schema=TranscriptSchema)
+    transcript_chunks = split_transcript(transcript)
+    payload = []
+    for chunk in transcript_chunks:
+        chunk_str = "\n".join(chunk)
+        entities = extract_speakers(chunk_str)
+        response = client.embeddings.create(
+            input=chunk_str,
+            model="text-embedding-3-small"
+        )
+        embedded = response.data[0].embedding
+        payload.append({"session_id": session_id,
+                        "thread_id": thread_id,
+                        "text": chunk_str,
+                        "vector": embedded,
+                        "entities": entities
+                        })
+    return vectorstore.db.create_table("transcripts", exist_ok=True, data=payload, schema=TranscriptSchema)

@@ -1,5 +1,10 @@
 import subprocess
 import os
+import re
+from typing import List, Tuple, Union
+from collections import defaultdict
+from langchain_experimental.text_splitter import SemanticChunker
+from langchain_community.embeddings import OpenAIEmbeddings
 # from tools import DATA_DIR
 # import markdown
 # from weasyprint import HTML
@@ -104,4 +109,347 @@ def json_to_markdown(data: dict) -> str:
 
     return "\n".join(markdown)
 
+#
+#
+# import re
+# from typing import List, Tuple
+#
+#
+# def tokenize(text: str) -> List[str]:
+#     """
+#     Simple tokenizer that splits text into words based on whitespace.
+#     """
+#     return text.strip().split()
+#
+#
+# def parse_transcript(transcript: str) -> List[Tuple[str, str]]:
+#     """
+#     Parses the transcript into a list of tuples containing speaker and their dialogue.
+#     """
+#     lines = transcript.strip().split('\n')
+#     dialogue = []
+#     speaker = None
+#     text_accumulator = []
+#
+#     for line in lines:
+#         # Match lines that start with a speaker label
+#         match = re.match(r'^(\w+):\s*(.*)', line)
+#         if match:
+#             # If we have accumulated text, save the previous dialogue
+#             if speaker and text_accumulator:
+#                 dialogue.append((speaker, ' '.join(text_accumulator).strip()))
+#                 text_accumulator = []
+#             speaker = match.group(1)
+#             text = match.group(2)
+#             text_accumulator.append(text)
+#         else:
+#             # Continuation of the previous speaker's dialogue
+#             text_accumulator.append(line.strip())
+#
+#     # Add the last accumulated dialogue
+#     if speaker and text_accumulator:
+#         dialogue.append((speaker, ' '.join(text_accumulator).strip()))
+#
+#     return dialogue
+#
+#
+# def chunk_transcript(dialogue: List[Tuple[str, str]], max_tokens: int = 100) -> List[List[Tuple[str, str]]]:
+#     """
+#     Chunks the dialogue into pieces based on the maximum token limit.
+#     """
+#     chunks = []
+#     current_chunk = []
+#     current_token_count = 0
+#
+#     for speaker, text in dialogue:
+#         tokens = tokenize(text)
+#         num_tokens = len(tokens)
+#
+#         # If adding this dialogue exceeds the max_tokens, start a new chunk
+#         if current_token_count + num_tokens > max_tokens and current_chunk:
+#             chunks.append(current_chunk)
+#             current_chunk = []
+#             current_token_count = 0
+#
+#         current_chunk.append((speaker, text))
+#         current_token_count += num_tokens
+#
+#     # Add the last chunk
+#     if current_chunk:
+#         chunks.append(current_chunk)
+#
+#     return chunks
+#
+#
+# def display_chunks(chunks: List[List[Tuple[str, str]]]):
+#     """
+#     Prints the chunks in a readable format.
+#     """
+#     for idx, chunk in enumerate(chunks):
+#         print(f"\n--- Chunk {idx + 1} ---\n")
+#         for speaker, text in chunk:
+#             print(f"{speaker}: {text}")
+#
+# # Example transcript
+# transcript = """
+# Claudio: Is that I. Let me just share my screen. It's not finished, but I think that maybe we can flush it out today, how do I want to set up. Need to take that?
+# Rupinder: No, that you will have to on a fire tread.
+# Claudio: Okay.
+# Rupinder: And I'll use this fire tread to tell him.
+# Claudio: So I think the agenda. Right, it starts off with.
+# Rupinder: But let's go. Yeah, you have the very first line with the generative AI stack.
+# Claudio: Right, right. And then. Right. So technically the agenda and these kind of go hand in hand where I kind of go into a high level into how we define generative AI and then zoom in into Bedrock and talk about how Bedrock can be used for the application development.
+# Rupinder: But pitch it.
+# Claudio: Okay. So actually I have a couple ideas. So, you know, generative AI is such a broad concept right now and it's so, and it's so quickly evolving. Here at AWS, we've decided that we want to break this down into three layers. One is the most like most core infrastructure layer, which is where GPUs and the resources come in. And it's very much catered for data scientists and domain ... Like my, I call it the elevator pitch. The idea is to press a button and by the time I get to.
+# Rupinder: The top, I think, you know what we should do is if you want to talk about this, right, so you say that before we dive into Bedrock, just want to level set the view and the vision we have in, in Amazon about generative AI stack.
+# Claudio: Okay.
+# Rupinder: And I mean, maybe you can make notes or you can kind of record kind of sometimes ramble on. Right. So, okay. Also, and we cater for the full stack of people who are building generative reals. So at the bottom layer is where we provide the infrastructure for fine tuning a model for running, for people who want to have more control over how they want the inferencing to happen.
+# Claudio: So would you say, would you describe the Amazon Q layer being used by power users. I've heard that before and I don't know if that is the correct term to use in this presentation. And I say that because he used the term advanced practitioners. So I just want to know if that is part of the language that we need to incorporate in this presentation.
+# Rupinder: So advanced practitioners is the bottom layer, right?
+# Claudio: Any infrastructure?
+# """
+#
+# # Parse the transcript
+# dialogue = parse_transcript(transcript)
+#
+# # Chunk the transcript
+# chunks = chunk_transcript(dialogue, max_tokens=100)
+#
+# # Display the chunks
+# display_chunks(chunks)
+#
+#
+#
 
+
+def tokenize(text: str) -> List[str]:
+    """
+    Tokenizes text into words based on whitespace.
+    """
+    return text.strip().split()
+
+
+def parse_transcript(transcript: str) -> List[str]:
+    """
+    Parses the transcript into a list of strings formatted as "Speaker: Text".
+    """
+    lines = transcript.strip().split('\n')
+    dialogue = []
+    speaker = None
+    text_accumulator = []
+
+    for line in lines:
+        # Match lines that start with a speaker label
+        match = re.match(r'^(\w+):\s*(.*)', line)
+        if match:
+            # Save the previous dialogue if any
+            if speaker and text_accumulator:
+                combined_text = f"{speaker}: {' '.join(text_accumulator).strip()}"
+                dialogue.append(combined_text)
+                text_accumulator = []
+            speaker = match.group(1)
+            text = match.group(2)
+            text_accumulator.append(text)
+        else:
+            # Continuation of the previous speaker's dialogue
+            text_accumulator.append(line.strip())
+
+    # Add the last accumulated dialogue
+    if speaker and text_accumulator:
+        combined_text = f"{speaker}: {' '.join(text_accumulator).strip()}"
+        dialogue.append(combined_text)
+
+    return dialogue
+
+
+def chunk_transcript(dialogue: List[str], max_tokens: int = 100) -> List[List[str]]:
+    """
+    Chunks the dialogue into pieces based on the maximum token limit.
+    Each chunk is a list of strings formatted as "Speaker: Text".
+    """
+    chunks = []
+    current_chunk = []
+    current_token_count = 0
+
+    for entry in dialogue:
+        tokens = tokenize(entry)
+        num_tokens = len(tokens)
+
+        # Start a new chunk if the token limit is exceeded
+        if current_token_count + num_tokens > max_tokens and current_chunk:
+            chunks.append(current_chunk)
+            current_chunk = []
+            current_token_count = 0
+
+        current_chunk.append(entry)
+        current_token_count += num_tokens
+
+    # Add the last chunk
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    return chunks
+
+
+def get_chunk_size(chunk: List[str]) -> int:
+    """
+    Returns the total number of tokens in the chunk.
+    """
+    total_tokens = sum(len(tokenize(entry)) for entry in chunk)
+    return total_tokens
+
+
+def get_total_transcript_size(chunks: List[List[str]]) -> int:
+    """
+    Returns the total number of tokens in the transcript.
+    """
+    total_tokens = sum(get_chunk_size(chunk) for chunk in chunks)
+    return total_tokens
+
+
+def determine_primary_speaker(chunk: List[str]) -> str:
+    """
+    Determines the primary speaker in a chunk based on the number of tokens spoken.
+    """
+    speaker_token_counts = defaultdict(int)
+
+    for entry in chunk:
+        # Extract speaker and text
+        match = re.match(r'^(\w+):\s*(.*)', entry)
+        if match:
+            speaker = match.group(1)
+            text = match.group(2)
+            tokens = tokenize(text)
+            num_tokens = len(tokens)
+            speaker_token_counts[speaker] += num_tokens
+
+    # Find the speaker with the maximum token count
+    primary_speaker = max(speaker_token_counts, key=speaker_token_counts.get)
+    return primary_speaker
+
+
+def further_split_chunk(chunk: List[str], primary_speaker: str) -> List[str]:
+    """
+    Splits a large chunk into smaller, semantically coherent chunks.
+    Adds the primary speaker's name at the beginning of each chunk.
+    """
+    # Combine the text from the chunk
+    combined_text = '\n'.join(chunk)
+
+    # Initialize the SemanticChunker
+    text_splitter = SemanticChunker(
+        OpenAIEmbeddings(), breakpoint_threshold_type="percentile"
+    )
+
+    # Split the text
+    docs = text_splitter.create_documents([combined_text])
+
+    # Each doc represents a semantic chunk
+    new_chunks = []
+    for doc in docs:
+        chunk_text = doc.page_content.strip()
+        # Add the primary speaker's name at the beginning
+        chunk_with_speaker = f"{primary_speaker} (Continued):\n{chunk_text}"
+        new_chunks.append(chunk_with_speaker)
+
+    return new_chunks
+
+
+def process_chunks(chunks: List[List[str]], percent_threshold: float = 0.2) -> List[Union[List[str], str]]:
+    """
+    Processes the initial chunks to further split large chunks, retaining the primary speaker.
+    """
+    # Compute the total transcript size
+    total_transcript_size = get_total_transcript_size(chunks)
+
+    processed_chunks = []
+    for chunk in chunks:
+        chunk_size = get_chunk_size(chunk)
+        if chunk_size > percent_threshold * total_transcript_size:
+            # Determine the primary speaker in the chunk
+            primary_speaker = determine_primary_speaker(chunk)
+            # Split the chunk further
+            new_chunks = further_split_chunk(chunk, primary_speaker)
+            processed_chunks.extend(new_chunks)
+        else:
+            processed_chunks.append(chunk)
+    return processed_chunks
+
+
+def display_processed_chunks(chunks: List[Union[List[str], str]]):
+    """
+    Displays the processed chunks in a readable format.
+    """
+    for idx, chunk in enumerate(chunks):
+        print(f"\n--- Chunk {idx + 1} ---\n")
+        if isinstance(chunk, list):
+            # Original chunk format (list of strings)
+            for entry in chunk:
+                print(entry)
+        else:
+            # Chunk from SemanticChunker (string)
+            print(chunk)
+
+
+def split_transcript(transcript: str,
+                     max_tokens: int = 100,
+                     percent_threshold: float = 0.6) -> List[Union[List[str], str]]:
+    """
+    Splits a transcript into smaller, semantically coherent chunks based on token limits and a percentage threshold.
+    """
+    # Parse the transcript
+    dialogue = parse_transcript(transcript)
+    # Chunk the transcript
+    chunks = chunk_transcript(dialogue, max_tokens=max_tokens)
+    # Process the chunks with a percent threshold (e.g., 20% of total transcript size)
+    return process_chunks(chunks, percent_threshold=percent_threshold)
+
+
+def extract_speakers(transcript: str):
+    """
+    Extracts all unique speakers from the transcript using regex.
+    Speakers are defined as words followed by a colon.
+    """
+    # Regular expression to match a speaker name followed by a colon
+    pattern = r'^(\w+):'
+
+    # Use findall to get all matches of speaker names
+    speakers = re.findall(pattern, transcript, re.MULTILINE)
+
+    # Return unique speakers
+    return list(set(speakers))
+
+#
+# # Example transcript
+# transcript = """
+# Claudio: Is that I. Let me just share my screen. It's not finished, but I think that maybe we can flush it out today ,...... how do I want to set up. Need to take that?
+# Rupinder: No, that you will have to on a fire tread.
+# Claudio: Okay.
+# Rupinder: And I'll use this fire tread to tell him.
+# Claudio: So I think the agenda. Right, it's, it starts off with.
+# Rupinder: But let's go. Yeah, you have the very first line with the generative AI stack.
+# Claudio: Right, right. And then. Right. So technically the agenda and these kind of go hand in hand where I kind of go into a high level into how we define generative AI and then zoom in into bedrock and talk about how bedrock can be used for the application development.
+# Rupinder: But pitch it.
+# Claudio: Okay. So actually I have a couple ideas. So, you know, generative AI is such a broad concept right now and it's so, and it's so quickly evolving. Here at AWS, we've decided that we want to break this down into three layers. One is the most like most core infrastructure layer, which is where GPU's and the resources come in. And it's very much catered for data scientists and domain .... Like my, I call it the elevator pitch. The idea is to press a button and by the time I get to.
+# Rupinder: The top, I think, you know what we should do is if you want to talk about this, right, so you say that before we dive into bedrock, just want to level set the view and the vision we have in, in Amazon about generative AI stack.
+# Claudio: Okay.
+# Rupinder: And I mean, maybe you can make notes or you can kind of record kind of sometimes ramble on. Right. So, okay. Also, and we cater for the full stack of people who are building generative reals. So at the bottom layer is where we provide the infrastructure for fine tuning a model for running, for people who want to have more control over how they want the inferencing to happen.
+# Claudio: So would you say, would you describe the Amazon Q layer being used by power users. I've heard that before and I don't know if that is the correct term to use in this presentation. And I say that because he used the term advanced practitioners. So I just want to know if that is part of the language that we need to incorporate in this presentation.
+# Rupinder: So advanced practitioners is the bottom layer, right?
+# Claudio: Any infrastructure?
+# """
+#
+# txt = split_transcript(transcript, max_tokens=100, percent_threshold=0.6)
+# print(txt)
+# #
+# # Parse the transcript
+# dialogue = parse_transcript(transcript)
+#
+# # Chunk the transcript
+# chunks = chunk_transcript(dialogue, max_tokens=100)
+#
+# # Process the chunks with a percent threshold (e.g., 20% of total transcript size)
+# processed_chunks = process_chunks(chunks, percent_threshold=0.6)
+# #
+# # # Display the processed chunks
+# display_processed_chunks(processed_chunks)
