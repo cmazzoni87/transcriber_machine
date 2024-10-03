@@ -100,14 +100,31 @@ While summarizing, ensure that the key points discussed during the meeting are c
 {transcript}
 """
 
-PRIORITIZE = """
+# PRIORITIZE = """
+# As a Generative AI Solutions Architect assistant, your task is to organize potential priorities based on the meeting transcript.
+#
+# **Instructions:**
+# - Analyze the transcript to extract information that can be categorized into potential priorities.
+# - Organize the extracted information in a structured format, such as a list or table.
+# - Highlight the most important aspects that need to be addressed to achieve the meeting’s goals.
+# - Ensure that the priorities are actionable and aligned with the meeting objectives.
+# - Do not include any information that is not present in the original transcript.
+#
+# **Background information:**
+# {background}
+#
+# **Transcript:**
+# {transcript}
+# """
+
+KEY_DECISIONS = """
 As a Generative AI Solutions Architect assistant, your task is to organize potential priorities based on the meeting transcript.
 
 **Instructions:**
-- Analyze the transcript to extract information that can be categorized into potential priorities.
-- Organize the extracted information in a structured format, such as a list or table.
-- Highlight the most important aspects that need to be addressed to achieve the meeting’s goals.
-- Ensure that the priorities are actionable and aligned with the meeting objectives.
+- Identify key decisions made during the meeting that directly influence the course of action for the team or project.
+- Summarize these decisions clearly and concisely, focusing on actionable items.
+- If any decision includes specific dates, numbers, or parties involved, ensure these details are included.
+- Avoid making inferences or assumptions.
 - Do not include any information that is not present in the original transcript.
 
 **Background information:**
@@ -116,3 +133,18 @@ As a Generative AI Solutions Architect assistant, your task is to organize poten
 **Transcript:**
 {transcript}
 """
+
+OPEN_QUESTIONS = """
+As a Generative AI Solutions Architect assistant, your task is to identify any unresolved questions or issues raised during the meeting that require further discussion or follow-up actions.
+
+**Instructions:**
+- Extract any questions or open issues mentioned by the participants that were not fully resolved during the meeting.
+- Focus on items that need further research, clarification, or decision-making.
+- Avoid summarizing general discussion points that have already been resolved or concluded.
+- Do not include any information that is not present in the original transcript.
+
+**Background information:**
+{background}
+
+**Transcript:**
+{transcript}

@@ -51,6 +51,16 @@ class Priorities(BaseModel):
     potential_priorities: List[PotentialPriority] = Field(description="Organized potential priorities to be addressed")
 
 
+class PotentialDecisions(BaseModel):
+    decision: str = Field(description="Name of the decision")
+    description: str = Field(description="Description of the decision")
+    reasoning: str = Field(description="Reasoning behind the decision")
+
+
+class KeyDecisions(BaseModel):
+    key_decisions: List[PotentialDecisions] = Field(description="Organized key decisions made during the meeting")
+
+
 class MeetingAnalysis(BaseModel):
     action_items: List[ActionItems] = Field(description="List of action items extracted from the meeting")
     sentiment_analysis: SentimentAnalysis = Field(description="Analysis of sentiment throughout the conversation")

@@ -1,9 +1,9 @@
 from pydantic import BaseModel
-from agents import ASSISTANT, REVIEWER, ACTION_ITEMS, SENTIMENT_ANALYSIS, CONVERSATION_SUMMARY, PRIORITIZE
+from agents import ASSISTANT, ACTION_ITEMS, SENTIMENT_ANALYSIS, CONVERSATION_SUMMARY, KEY_DECISIONS
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from agents.structure import MeetingAnalysis, ConversationSummary, SentimentAnalysis, PotentialPriority, ActionItems, Priorities
+from agents.structure import MeetingAnalysis, ConversationSummary, SentimentAnalysis, ActionItems, KeyDecisions
 from tools.txt_preprocessor import json_to_markdown
 import datetime
 import streamlit as st
@@ -65,13 +65,15 @@ def notes_agent(transcript_, background=''):
         potential_priorities = task_breakdown({"transcript": f"{transcript_}",
                                     "background": f"{background}"},
                                     ["transcript", "background"],
-                                    pydantic_style=Priorities,
-                                    prompt=PRIORITIZE)
+                                    pydantic_style=KeyDecisions,
+                                    prompt=KEY_DECISIONS)
 
-        results = {"action_items": action_items,
-                   "sentiment_analysis": sentiment_analysis,
-                   "conversation_summary": summary,
-                   "potential_priorities": potential_priorities}
+        results = {
+            "action_items": action_items,
+            "sentiment_analysis": sentiment_analysis,
+            "conversation_summary": summary,
+            "key_decisions": potential_priorities
+                   }
 
         markdown_result = json_to_markdown(results)
         return markdown_result
