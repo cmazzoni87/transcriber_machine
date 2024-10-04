@@ -9,6 +9,8 @@ from cryptography.fernet import Fernet
 from tools.diarization import process_audio
 from tools.txt_preprocessor import extract_speakers
 from agents.agent import notes_agent
+from storage.memory_manager import VectorStoreManager
+
 # from tools.emailer import send_email_with_mailgun
 # from tools.stats import analyze_transcript  # Assuming you have this module
 # from dotenv import load_dotenv
@@ -23,6 +25,8 @@ from agents.agent import notes_agent
 #     if not key:
 #         raise ValueError("ENCRYPTION_KEY not set in environment variables.")
 #     return key
+
+
 
 def get_encryption_key():
     """Retrieve the encryption key from Streamlit secrets."""
@@ -49,6 +53,7 @@ def decrypt_data(encrypted_data: str) -> str:
 
 
 # Database setup
+# lancedb = VectorStoreManager()
 engine = create_engine('sqlite:///creds.db')
 Base = declarative_base()
 
@@ -253,7 +258,7 @@ def upload_page():
                     st.session_state.transcript,
                     st.session_state.name_mapping
                 )
-                speaker_names = extract_speakers(st.session_state.transcript)
+                # speaker_names = extract_speakers(st.session_state.transcript)
                 st.session_state.names_confirmed = True
                 st.rerun()
 
