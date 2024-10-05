@@ -7,7 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from cryptography.fernet import Fernet
 from tools.diarization import process_audio
-from tools.txt_preprocessor import extract_speakers
+# from tools.txt_preprocessor import extract_speakers
 from agents.agent import notes_agent
 from storage.memory_manager import VectorStoreManager
 

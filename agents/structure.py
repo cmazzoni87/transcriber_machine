@@ -61,6 +61,17 @@ class KeyDecisions(BaseModel):
     key_decisions: List[PotentialDecisions] = Field(description="Organized key decisions made during the meeting")
 
 
+class Source(BaseModel):
+    source: str = Field(description="The piece of text used to provide the answer")
+    speaker: str = Field(description="The speaker or author of the information")
+
+
+class AnswerWithSources(BaseModel):
+    answer: str = Field(description="Answer to the question")
+    references: List[Source] = Field(description="Sources used to provide the answer")
+
+
+
 class MeetingAnalysis(BaseModel):
     action_items: List[ActionItems] = Field(description="List of action items extracted from the meeting")
     sentiment_analysis: SentimentAnalysis = Field(description="Analysis of sentiment throughout the conversation")
