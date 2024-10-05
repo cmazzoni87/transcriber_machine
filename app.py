@@ -1,33 +1,33 @@
 import os
 import re
+import datetime
+import base64
 import streamlit as st
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import sessionmaker, declarative_base
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from cryptography.fernet import Fernet
+from mutagen import File as MutagenFile  # Import Mutagen
 from tools.diarization import process_audio
 # from tools.txt_preprocessor import extract_speakers
-from agents.agent import notes_agent
-from storage.memory_manager import VectorStoreManager
+from agents.agent import notes_agent, chat_agent  # Assume chat_agent is defined
+from storage.memory_manager import (
+    VectorStoreManager,
+    notes_to_table,
+    transcript_to_table,
+    get_transcripts  # We'll assume it's imported if needed
+)
 
-# from tools.emailer import send_email_with_mailgun
-# from tools.stats import analyze_transcript  # Assuming you have this module
-# from dotenv import load_dotenv
-# Load environment variables
-# load_dotenv()
+
+# Import the copy to clipboard component
+from st_copy_to_clipboard import st_copy_to_clipboard as st_copy_button
+
+# Initialize lancedb
+lancedb = VectorStoreManager()
 
 
 # Encryption key retrieval
-# def get_encryption_key():
-#     """Retrieve the encryption key from environment variables."""
-#     key = os.getenv("ENCRYPTION_KEY")
-#     if not key:
-#         raise ValueError("ENCRYPTION_KEY not set in environment variables.")
-#     return key
-
-
-
 def get_encryption_key():
     """Retrieve the encryption key from Streamlit secrets."""
     key = st.secrets["ENCRYPTION_KEY"]
@@ -53,7 +53,6 @@ def decrypt_data(encrypted_data: str) -> str:
 
 
 # Database setup
-# lancedb = VectorStoreManager()
 engine = create_engine('sqlite:///creds.db')
 Base = declarative_base()
 
@@ -79,6 +78,13 @@ class User(Base):
         if self.encrypted_info:
             return decrypt_data(self.encrypted_info)
         return None
+
+
+# Define the Thread model
+class Thread(Base):
+    __tablename__ = 'thread'
+    id = Column(Integer, primary_key=True)
+    thread_id = Column(String(150), unique=True, nullable=False)
 
 
 Base.metadata.create_all(engine)
@@ -124,6 +130,20 @@ def replace_speaker_names(transcript, name_mapping):
             transcript = re.sub(rf'\b{re.escape(original_name)}:', f'{new_name}:', transcript)
     return transcript
 
+# Function to store a new thread_id
+def store_thread_id(thread_id):
+    """Stores a new thread_id in the database."""
+    existing_thread = db_session.query(Thread).filter_by(thread_id=thread_id).first()
+    if not existing_thread:
+        new_thread = Thread(thread_id=thread_id)
+        db_session.add(new_thread)
+        db_session.commit()
+
+# Function to get all available thread_ids
+def get_all_thread_ids():
+    """Retrieves all thread_ids from the database."""
+    threads = db_session.query(Thread).all()
+    return [thread.thread_id for thread in threads]
 
 def main():
     st.title('Audio Processing App')
@@ -138,8 +158,11 @@ def main():
         elif page == 'Create Account':
             create_account_page()
     else:
-        upload_page()
-
+        page = st.sidebar.selectbox('Navigation', ['Upload & Process Audio', 'Chatbot'])
+        if page == 'Upload & Process Audio':
+            upload_page()
+        elif page == 'Chatbot':
+            chatbot_page()
 
 def login_page():
     st.header('Login')
@@ -154,7 +177,6 @@ def login_page():
             st.rerun()
         else:
             st.error('Invalid username or password')
-
 
 def create_account_page():
     st.header('Create Account')
@@ -174,7 +196,6 @@ def create_account_page():
             st.success('Account created successfully!')
             st.rerun()
 
-
 def upload_page():
     st.header('Upload and Process Audio')
     if st.button('Logout'):
@@ -183,6 +204,7 @@ def upload_page():
 
     recipient_email = st.text_input('Recipient Email')
     context = st.text_area('Context (optional)', '')
+    uploaded_images = st.file_uploader('Upload images (optional)', type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
 
     # Initialize session state variables
     if 'transcript' not in st.session_state:
@@ -195,6 +217,14 @@ def upload_page():
         st.session_state.processing_done = False
     if 'names_confirmed' not in st.session_state:
         st.session_state.names_confirmed = False
+    if 'thread_id_to_use' not in st.session_state:
+        st.session_state.thread_id_to_use = None
+    if 'session_id' not in st.session_state:
+        st.session_state.session_id = None
+    if 'thread_selected' not in st.session_state:
+        st.session_state.thread_selected = False
+    if 'file_datetime' not in st.session_state:
+        st.session_state.file_datetime = None
 
     uploaded_file = st.file_uploader('Choose an audio file', type=list(allowed_extensions))
 
@@ -212,8 +242,38 @@ def upload_page():
                     f.write(uploaded_file.getbuffer())
                 st.success('File uploaded successfully')
 
+                # Try to get the creation time from the file's metadata
+                try:
+                    audio = MutagenFile(file_path)
+                    file_datetime = None
+                    if audio is not None and audio.tags is not None:
+                        # Try common tags for date
+                        date_tags = ['date', 'creation_date', 'year', 'recording_date', 'TDRC', 'TDEN']
+                        for tag in date_tags:
+                            if tag in audio.tags:
+                                date_str = str(audio.tags[tag][0])
+                                try:
+                                    # Try parsing the date string
+                                    file_datetime = datetime.datetime.strptime(date_str, '%Y-%m-%d')
+                                    break
+                                except ValueError:
+                                    try:
+                                        file_datetime = datetime.datetime.strptime(date_str, '%Y')
+                                        break
+                                    except ValueError:
+                                        pass
+                    if file_datetime is None:
+                        # If date not found in tags, use current time
+                        file_datetime = datetime.datetime.now()
+                except Exception:
+                    # If any error occurs, use current time
+                    file_datetime = datetime.datetime.now()
+
+                # Store the file_datetime in session state
+                st.session_state.file_datetime = file_datetime
+
                 # Process the audio file and generate the transcript
-                with st.spinner('Processing audio...'):
+                with st.spinner('Transcribing audio...'):
                     try:
                         transcript = process_audio(file_path)
                         st.session_state.transcript = transcript
@@ -258,7 +318,6 @@ def upload_page():
                     st.session_state.transcript,
                     st.session_state.name_mapping
                 )
-                # speaker_names = extract_speakers(st.session_state.transcript)
                 st.session_state.names_confirmed = True
                 st.rerun()
 
@@ -267,44 +326,120 @@ def upload_page():
         # Display the updated transcript
         st.subheader('Updated Transcript')
         st.text_area('Transcript', st.session_state.transcript, height=300)
+        # Add "Copy Transcript" button using the component
+        st_copy_button(st.session_state.transcript, 'Copy Transcript 📋', after_copy_label='Copied! ✅')
 
-        # Generate notes using the updated transcript
-        with st.spinner('Generating notes...'):
-            try:
-                # Pass the context to notes_agent
-                markdown_result = notes_agent(st.session_state.transcript, context)
-                st.success('Notes generated successfully')
-            except Exception as e:
-                st.error(f'Error generating notes: {e}')
-                return
+        if not st.session_state.thread_selected:
+            # Get available thread_ids
+            available_thread_ids = get_all_thread_ids()
+            # Add an option for 'Generate New'
+            available_thread_ids = ['Generate New'] + available_thread_ids
 
-        # Display the markdown result
-        st.subheader('Generated Notes')
-        st.markdown(markdown_result)
+            # Let the user select a thread_id
+            st.subheader('Select Thread ID')
+            with st.form('thread_selection_form'):
+                selected_thread_id = st.selectbox(
+                    'Select an existing thread ID or generate a new one:',
+                    available_thread_ids
+                )
+                submit_thread_selection = st.form_submit_button('Select')
+            if submit_thread_selection:
+                if selected_thread_id == 'Generate New':
+                    # Generate new thread_id using file creation time
+                    file_datetime = st.session_state.file_datetime
+                    timestamp = file_datetime.strftime("%Y%m%d%H%M%S")
+                    # Get participants' names
+                    participants = '_'.join([
+                        name.strip().replace(' ', '') for name in st.session_state.name_mapping.values() if name.strip()
+                    ])
+                    thread_id_to_use = f"{participants}_{timestamp}"
+                    # Store the new thread_id in the database
+                    store_thread_id(thread_id_to_use)
+                else:
+                    # Use the selected existing thread_id
+                    thread_id_to_use = selected_thread_id
+                # Generate session_id using file creation time
+                file_datetime = st.session_state.file_datetime
+                session_id = f"session_id_{file_datetime.strftime('%Y%m%d%H%M%S')}"
+                # Store the selected thread_id and session_id in session state
+                st.session_state.thread_id_to_use = thread_id_to_use
+                st.session_state.session_id = session_id
+                st.session_state.thread_selected = True
+                st.rerun()
+        else:
+            # Proceed with processing
+            # Store the transcript in lancedb
+            transcript_to_table(
+                transcript=st.session_state.transcript,
+                thread_id=st.session_state.thread_id_to_use,
+                session_id=st.session_state.session_id,
+                vectorstore=lancedb
+            )
 
-        # # Perform additional analyses and display images
-        # st.subheader('Transcript Analysis')
-        # analysis_images = analyze_transcript(st.session_state.transcript)
-        #
-        # for title, image_path in analysis_images.items():
-        #     st.subheader(title)
-        #     st.image(image_path, use_column_width=True)
+            # Generate notes using the updated transcript
+            with st.spinner('Generating notes...'):
+                try:
+                    # Pass the context to notes_agent
+                    markdown_result = notes_agent(st.session_state.transcript, context)
+                    if markdown_result is None:
+                        raise ValueError("notes_agent returned None")
+                    st.success('Notes generated successfully')
 
-        # Send the PDF via email automatically
-        with st.spinner('Sending email...'):
-            try:
-                # send_email_with_mailgun(
-                #     subject="Meeting Notes",
-                #     body="Please find the attached meeting notes.",
-                #     recipient_email=recipient_email,
-                #     file_path=pdf_path
-                # )
-                st.success('Email sent successfully!')
-            except Exception as e:
-                st.error(f'Error sending email: {e}')
+                    # Process images if any
+                    if uploaded_images:
+                        image_descriptions = []
+                        for image_file in uploaded_images:
+                            # description = describe_image(image_file)
+                            description = f"Image Description: Placeholder description."
+                            image_descriptions.append((image_file, description))
 
-        # Reset processing flags for next upload
-        st.session_state.processing_done = True
+                        # Append images and descriptions to the report
+                        markdown_result += '\n\n### Related Images\n'
+                        for idx, (image_file, description) in enumerate(image_descriptions):
+                            # Read image data
+                            image_bytes = image_file.read()
+                            # Reset file pointer to beginning
+                            image_file.seek(0)
+                            # Encode image in base64
+                            image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+                            image_extension = image_file.type.split('/')[-1]
+                            image_data_url = f"data:image/{image_extension};base64,{image_base64}"
+                            # Append image and description to markdown
+                            markdown_result += f"#### Image {idx+1}\n"
+                            markdown_result += f"![]({image_data_url})\n\n"
+                            markdown_result += f"{description}\n\n"
+
+                    # Store the notes in lancedb
+                    document = markdown_result.split('\n\n### Related Images\n')[0]
+                    entities = ', '.join([
+                        name.strip() for name in st.session_state.name_mapping.values() if name.strip()
+                    ])
+                    notes_to_table(
+                        document=document,
+                        session_id=st.session_state.session_id,
+                        thread_id=st.session_state.thread_id_to_use,
+                        entities=entities,
+                        image_tags=None,
+                        bit_map_object=None,
+                        vectorstore=lancedb
+                    )
+
+                except Exception as e:
+                    st.error(f'Error generating notes: {e}')
+                    return
+
+            # Display the markdown result
+            st.subheader('Generated Notes')
+            st.markdown(markdown_result, unsafe_allow_html=True)
+            if "\n\n### Related Images\n" in markdown_result:
+                markdown_result_copy = markdown_result.split("\n\n### Related Images\n")[0]
+            else:
+                markdown_result_copy = markdown_result
+            # Add "Copy Report" button using the component
+            st_copy_button(markdown_result_copy, 'Copy Report 📋', after_copy_label='Copied! ✅')
+            st.write('')
+            # Reset processing flags for next upload
+            st.session_state.processing_done = True
 
     if st.session_state.processing_done:
         if st.button('Reset for Next Upload'):
@@ -314,7 +449,108 @@ def upload_page():
             st.session_state.name_mapping = {}
             st.session_state.processing_done = False
             st.session_state.names_confirmed = False
+            st.session_state.thread_id_to_use = None
+            st.session_state.session_id = None
+            st.session_state.thread_selected = False
+            st.session_state.file_datetime = None
             st.rerun()
+
+def chatbot_page():
+    st.header('Chatbot Interface')
+    if st.button('Logout'):
+        st.session_state.logged_in = False
+        st.rerun()
+
+    # Get all available thread_ids
+    available_thread_ids = get_all_thread_ids()
+
+    if not available_thread_ids:
+        st.warning('No threads available. Please upload and process audio files first.')
+        return
+
+    selected_thread_id = st.sidebar.selectbox('Select Thread ID', available_thread_ids)
+
+    # Add widgets for search type, prefilter, keyword search, limit
+    search_type = 'hybrid'
+    if st.sidebar.checkbox('Use Full-Text Search (FTS)'):
+        search_type = 'fts'
+
+    prefilter = st.sidebar.text_input('Prefilter (SQL expression)')
+    if not prefilter.strip():
+        prefilter = None
+
+    key_word_search = st.sidebar.text_input('Keyword Search')
+    if not key_word_search.strip():
+        key_word_search = None
+
+    limit = st.sidebar.number_input('Number of Results', min_value=1, max_value=100, value=10)
+
+    # Initialize session state for chatbot messages
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+
+    # User input
+    user_input = st.text_input('You:', key='user_input')
+
+    if st.button('Send'):
+        if user_input.strip() == '':
+            st.error('Please enter a question.')
+        else:
+            # print parameters in the terminal
+            print(f"Selected Thread ID: {selected_thread_id}")
+            print(f"Search Type: {search_type}")
+            print(f"Prefilter: {prefilter}")
+            print(f"Keyword Search: {key_word_search}")
+            print(f"Limit: {limit}")
+            print(f"User Input: {user_input}")
+
+
+            # Retrieve transcripts using get_transcripts function
+            context_data = get_transcripts(
+                query=user_input,
+                thread_id=selected_thread_id,
+                prefilter=prefilter,
+                limit=limit,
+                vectorstore=lancedb,
+                search_type=search_type,
+            )
+
+            if not context_data:
+                st.error('No data found for the selected thread.')
+                return
+
+            # Generate response using chat_agent function
+            with st.spinner('Generating response...'):
+                try:
+                    # chat_agent now returns a dictionary with 'answer' and 'references'
+                    chat_response = chat_agent(user_input, context_data)
+                    response = chat_response['answer']
+                    references = chat_response.get('references', [])
+                    # Append the conversation to the chat history
+                    st.session_state.chat_history.append({'speaker': 'You', 'message': user_input})
+                    st.session_state.chat_history.append({'speaker': 'Assistant', 'message': response, 'references': references})
+                except Exception as e:
+                    st.error(f'Error generating response: {e}')
+                    return
+
+    # Display chat history
+    for chat_entry in st.session_state.chat_history:
+        speaker = chat_entry['speaker']
+        message = chat_entry['message']
+        if speaker == 'You':
+            st.markdown(f"**{speaker}:** {message}")
+        else:
+            st.markdown(f"**{speaker}:** {message}", unsafe_allow_html=True)
+            # If there are references, display them
+            references = chat_entry.get('references', [])
+            if references:
+                st.markdown('---')
+                st.markdown('**Sources:**')
+                for ref in references:
+                    source_text = ref.get('source', '')
+                    source_speaker = ref.get('speaker', '')
+                    # Display the source text and speaker
+                    st.markdown(f"- **{source_speaker}**: {source_text}")
 
 
 if __name__ == '__main__':

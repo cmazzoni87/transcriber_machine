@@ -117,8 +117,10 @@ def table_search(query: str,
 
     if prefilter:
         results = results.where(prefilter, prefilter=True)
-
-    listed_results = results.to_list()
+    try:
+        listed_results = results.to_list()
+    except Exception as e:
+        listed_results = []
     final_results = [result for result in listed_results if result['_relevance_score'] > threshold]
     return final_results
 
@@ -187,11 +189,8 @@ def transcript_to_table(transcript: str,
                                 schema=TranscriptSchema)
 
 
-
-
-
-def get_transcripts(thread_id: Optional[str],
-                    key_word_search: Optional[str],
+def get_transcripts(query: str,
+                    thread_id: Optional[str],
                     prefilter: Optional[str],
                     limit: int,
                     vectorstore: VectorStoreManager,
@@ -202,12 +201,10 @@ def get_transcripts(thread_id: Optional[str],
 
     Args:
         thread_id (str or None): The thread ID to filter by.
-        key_word_search (str or None): The keyword or query string for searching.
         prefilter (str or None): SQL expression for prefiltering (e.g., date ranges).
         limit (int): Maximum number of results to return.
         vectorstore (VectorStoreManager): The vectorstore manager instance.
         search_type (str): Type of search to perform ('hybrid' or 'fts').
-        text_field (str or List[str], optional): The text field(s) to perform full-text search on.
         threshold (float, optional): Relevance score threshold for filtering results.
 
     Returns:
@@ -215,9 +212,6 @@ def get_transcripts(thread_id: Optional[str],
     """
     # Open the transcripts table
     transcript_table = vectorstore.db.open_table("transcripts")
-
-    # Build the query
-    query = key_word_search if key_word_search else ''
 
     # Build prefilter conditions
     prefilter_conditions = []
@@ -246,7 +240,7 @@ def get_transcripts(thread_id: Optional[str],
 
 
 if __name__ == "__main__":
-    results = get_transcripts(thread_id="thread_1", key_word_search="Claudio", prefilter=None, limit=10, vectorstore=VectorStoreManager())
+    results = get_transcripts(query="what are the 3 layers of AI", thread_id="Jane_Joe_20241004004215", prefilter=None, limit=10, vectorstore=VectorStoreManager())
     print(results)
 
 
