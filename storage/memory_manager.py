@@ -12,7 +12,7 @@ from openai import OpenAI
 from tools.txt_preprocessor import split_transcript, extract_speakers
 import streamlit as st
 
-client = OpenAI()
+client = OpenAI(api_key=st.secrets["OPENAI_KEY"])
 
 
 # Manage API keys centrally
