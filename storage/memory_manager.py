@@ -12,7 +12,7 @@ from openai import OpenAI
 from tools.txt_preprocessor import split_transcript, extract_speakers
 import streamlit as st
 
-os.environ["OPENAI_KEY"] = st.secrets["OPENAI_KEY"]
+os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_KEY"]
 os.environ["COHERE_KEY"] = st.secrets["COHERE_KEY"]
 os.environ["CO_API_KEY"] = st.secrets["COHERE_KEY"]
 
