@@ -5,10 +5,13 @@ from typing import List, Tuple, Union
 from collections import defaultdict
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_community.embeddings import OpenAIEmbeddings
-# from tools import DATA_DIR
-# import markdown
-# from weasyprint import HTML
+import streamlit as st
 
+
+
+os.environ["OPENAI_KEY"] = st.secrets["OPENAI_KEY"]
+os.environ["COHERE_KEY"] = st.secrets["COHERE_KEY"]
+os.environ["CO_API_KEY"] = st.secrets["COHERE_KEY"]
 
 def convert_markdown_to_pdf(mark_downfile_name: str) -> str:
     """

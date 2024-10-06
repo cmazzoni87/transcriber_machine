@@ -13,6 +13,7 @@ KEY_AI = st.secrets["OPENAI_KEY"]
 
 os.environ["OPENAI_KEY"] = st.secrets["OPENAI_KEY"]
 os.environ["COHERE_KEY"] = st.secrets["COHERE_KEY"]
+os.environ["CO_API_KEY"] = st.secrets["COHERE_KEY"]
 
 def task_breakdown(_message: dict,
                    input_vars=None,
