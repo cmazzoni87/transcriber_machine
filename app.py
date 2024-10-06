@@ -20,6 +20,9 @@ from storage.memory_manager import (
 )
 
 
+os.environ["OPENAI_KEY"] = st.secrets["OPENAI_KEY"]
+os.environ["COHERE_KEY"] = st.secrets["COHERE_KEY"]
+
 # Import the copy to clipboard component
 from st_copy_to_clipboard import st_copy_to_clipboard as st_copy_button
 
