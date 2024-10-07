@@ -5,6 +5,8 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from agents.structure import MeetingAnalysis, ConversationSummary, SentimentAnalysis, ActionItems, KeyDecisions, AnswerWithSources
 from tools.txt_preprocessor import json_to_markdown
+from time import sleep
+import asyncio
 import datetime
 import streamlit as st
 import os
@@ -44,41 +46,53 @@ def task_breakdown(_message: dict,
     return chain.invoke(_message)
 
 
-def notes_agent(transcript_, background=''):
+# New async function
+async def async_notes_agent(transcript_, background=''):
     try:
         # Sample transcript from text file
         today = datetime.date.today().strftime("%Y-%m-%d")
         transcript_ = f"Today's Date: {today}\n" + transcript_
-        summary = task_breakdown({"transcript": f"{transcript_}",
-                                  "background": f"{background}"},
-                                 ["transcript", "background"],
-                                 pydantic_style=ConversationSummary,
-                                 prompt=CONVERSATION_SUMMARY)
 
-        action_items = task_breakdown({"transcript": f"{transcript_}",
-                                       "background": f"{background}"},
-                                      ["transcript", "background"],
-                                      pydantic_style=ActionItems,
-                                      prompt=ACTION_ITEMS)
+        # Create tasks for all async task_breakdown calls
+        summary_task = asyncio.create_task(
+            task_breakdown({"transcript": f"{transcript_}", "background": f"{background}"},
+                           ["transcript", "background"],
+                           pydantic_style=ConversationSummary,
+                           prompt=CONVERSATION_SUMMARY)
+        )
 
-        sentiment_analysis = task_breakdown({"transcript": f"{transcript_}",
-                                             "background": f"{background}"},
-                                            ["transcript", "background"],
-                                            pydantic_style=SentimentAnalysis,
-                                            prompt=SENTIMENT_ANALYSIS)
+        action_items_task = asyncio.create_task(
+            task_breakdown({"transcript": f"{transcript_}", "background": f"{background}"},
+                           ["transcript", "background"],
+                           pydantic_style=ActionItems,
+                           prompt=ACTION_ITEMS)
+        )
 
-        potential_priorities = task_breakdown({"transcript": f"{transcript_}",
-                                    "background": f"{background}"},
-                                    ["transcript", "background"],
-                                    pydantic_style=KeyDecisions,
-                                    prompt=KEY_DECISIONS)
+        sentiment_analysis_task = asyncio.create_task(
+            task_breakdown({"transcript": f"{transcript_}", "background": f"{background}"},
+                           ["transcript", "background"],
+                           pydantic_style=SentimentAnalysis,
+                           prompt=SENTIMENT_ANALYSIS)
+        )
+
+        potential_priorities_task = asyncio.create_task(
+            task_breakdown({"transcript": f"{transcript_}", "background": f"{background}"},
+                           ["transcript", "background"],
+                           pydantic_style=KeyDecisions,
+                           prompt=KEY_DECISIONS)
+        )
+
+        # Await all tasks concurrently
+        summary, action_items, sentiment_analysis, potential_priorities = await asyncio.gather(
+            summary_task, action_items_task, sentiment_analysis_task, potential_priorities_task
+        )
 
         results = {
             "action_items": action_items,
             "sentiment_analysis": sentiment_analysis,
             "conversation_summary": summary,
             "key_decisions": potential_priorities
-                   }
+        }
 
         markdown_result = json_to_markdown(results)
         return markdown_result
@@ -86,6 +100,63 @@ def notes_agent(transcript_, background=''):
     except Exception as e:
         print(f"Error processing file: {e}")
         return None
+
+
+# Wrapper function that calls the async function
+def notes_agent(transcript_, background=''):
+    try:
+        return asyncio.run(async_notes_agent(transcript_, background))
+    except Exception as e:
+        sleep(2)
+        try:
+            return asyncio.run(async_notes_agent(transcript_, background))
+        except:
+            pass
+        print(f"Error processing file: {e}")
+        return None
+
+# def notes_agent(transcript_, background=''):
+#     try:
+#         # Sample transcript from text file
+#         today = datetime.date.today().strftime("%Y-%m-%d")
+#         transcript_ = f"Today's Date: {today}\n" + transcript_
+#         summary = task_breakdown({"transcript": f"{transcript_}",
+#                                   "background": f"{background}"},
+#                                  ["transcript", "background"],
+#                                  pydantic_style=ConversationSummary,
+#                                  prompt=CONVERSATION_SUMMARY)
+#
+#         action_items = task_breakdown({"transcript": f"{transcript_}",
+#                                        "background": f"{background}"},
+#                                       ["transcript", "background"],
+#                                       pydantic_style=ActionItems,
+#                                       prompt=ACTION_ITEMS)
+#
+#         sentiment_analysis = task_breakdown({"transcript": f"{transcript_}",
+#                                              "background": f"{background}"},
+#                                             ["transcript", "background"],
+#                                             pydantic_style=SentimentAnalysis,
+#                                             prompt=SENTIMENT_ANALYSIS)
+#
+#         potential_priorities = task_breakdown({"transcript": f"{transcript_}",
+#                                     "background": f"{background}"},
+#                                     ["transcript", "background"],
+#                                     pydantic_style=KeyDecisions,
+#                                     prompt=KEY_DECISIONS)
+#
+#         results = {
+#             "action_items": action_items,
+#             "sentiment_analysis": sentiment_analysis,
+#             "conversation_summary": summary,
+#             "key_decisions": potential_priorities
+#                    }
+#
+#         markdown_result = json_to_markdown(results)
+#         return markdown_result
+#
+#     except Exception as e:
+#         print(f"Error processing file: {e}")
+#         return None
 
 
 def chat_agent(user_input, context):

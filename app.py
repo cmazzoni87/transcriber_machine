@@ -311,7 +311,11 @@ def upload_page():
         with st.form('speaker_naming_form'):
             for speaker, data in speakers_to_rename.items():
                 st.subheader(f'{speaker}')
-                sample_lines = data['lines'][:2]  # Get first two lines
+                sample_lines = []
+                for line in data['lines'][:2]:
+                    words = ' '.join(line.split()[:20]) + " ..."  # Display first 5 words
+                    sample_lines.append(words)
+                # sample_lines = data['lines'][:2]  # Get first two lines
                 for line in sample_lines:
                     st.write(f'- {line}')
                 name = st.text_input(f'Name for {speaker}', key=f'name_input_{speaker}')

@@ -121,7 +121,7 @@ def table_search(query: str,
         results = _table.search(query).limit(limit)
 
     if prefilter:
-        results = results.where(prefilter, prefilter=True)
+        results = results.where(prefilter, prefilter=True).to_list()
     try:
         listed_results = results.to_list()
     except Exception as e:
@@ -221,7 +221,7 @@ def get_transcripts(query: str,
     # Build prefilter conditions
     prefilter_conditions = []
     if thread_id:
-        prefilter_conditions.append(f"thread_id = '{thread_id}'")
+        prefilter_conditions.append(f'thread_id = "{thread_id}"')
     if prefilter:
         prefilter_conditions.append(prefilter)
     # Combine prefilter conditions
@@ -245,7 +245,9 @@ def get_transcripts(query: str,
 
 
 if __name__ == "__main__":
-    results = get_transcripts(query="what are the 3 layers of AI", thread_id="Jane_Joe_20241004004215", prefilter=None, limit=10, vectorstore=VectorStoreManager())
+    vector = VectorStoreManager(store_name=r"C:\Users\cmazz\PycharmProjects\transcriber_machine\captain_logs")
+    # vector.db.open_table("transcripts")
+    results = get_transcripts(query="what is rupiders concern?", thread_id="Jane_Joe_20241004010814", prefilter=None, limit=10, vectorstore=vector)
     print(results)
 
 
