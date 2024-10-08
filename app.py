@@ -313,7 +313,10 @@ def upload_page():
                 st.subheader(f'{speaker}')
                 sample_lines = []
                 for line in data['lines'][:2]:
-                    words = ' '.join(line.split()[:20]) + " ..."  # Display first 5 words
+                    if len(line.split()) > 35:
+                        words = ' '.join(line.split()[:35]) + " ..."  # Display first 5 words
+                    else:
+                        words = line
                     sample_lines.append(words)
                 # sample_lines = data['lines'][:2]  # Get first two lines
                 for line in sample_lines:
