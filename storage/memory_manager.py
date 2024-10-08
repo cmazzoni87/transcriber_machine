@@ -11,6 +11,11 @@ from lancedb.rerankers import LinearCombinationReranker, ColbertReranker, Cohere
 from openai import OpenAI
 from tools.txt_preprocessor import split_transcript, extract_speakers
 import streamlit as st
+from pathlib import Path
+
+# get path to project root
+storage_root = Path(__file__).parent
+
 
 os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_KEY"]
 os.environ["COHERE_KEY"] = st.secrets["COHERE_KEY"]
@@ -89,7 +94,7 @@ class VectorStoreManager:
     def __init__(self, store_name="captain_logs"):
         _EMBEDDINGS_DIMENSIONS = 512
         self.instance_id = datetime.datetime.now().strftime("%Y%m%d%H%M%S") + "_" + str(uuid.uuid4())
-        self.store_name = store_name
+        self.store_name = storage_root / store_name
         self.db = self.connect_to_db()
 
     def connect_to_db(self) -> lancedb.DBConnection:
@@ -103,8 +108,10 @@ def table_search(query: str,
                  text_field: Optional[str | List[str]] = None,
                  search_type: Optional[Literal['fts', 'hybrid', None]] = None,
                  limit: int = 10,
-                 threshold: Optional[float | None] = 0.9,
+                 threshold: Optional[float | None] = 0.6,
                  ) -> list:
+
+    search_type = 'NORMAL'  # HARD CODED
 
     if search_type == 'fts' and text_field is None:
         raise "Missing text field to perform Full-Text-Search"
@@ -121,12 +128,19 @@ def table_search(query: str,
         results = _table.search(query).limit(limit)
 
     if prefilter:
-        results = results.where(prefilter, prefilter=True).to_list()
+        try:
+            results = results.where(prefilter, prefilter=True).to_list()
+        except Exception as e:
+            results = results.to_list()
+
     try:
         listed_results = results.to_list()
     except Exception as e:
         listed_results = []
-    final_results = [result for result in listed_results if result['_relevance_score'] > threshold]
+    if search_type == 'hybrid':
+        final_results = [result for result in listed_results if result['_relevance_score'] > threshold]
+    else:
+        final_results = results
     return final_results
 
 
@@ -200,7 +214,7 @@ def get_transcripts(query: str,
                     limit: int,
                     vectorstore: VectorStoreManager,
                     search_type: str = 'hybrid',
-                    threshold: Optional[float] = 0.9) -> List[Dict[str, Any]]:
+                    threshold: Optional[float] = 0.6) -> List[Dict[str, Any]]:
     """
     Retrieves transcripts from the vectorstore using advanced search.
 
@@ -215,8 +229,10 @@ def get_transcripts(query: str,
     Returns:
         List[Dict[str, Any]]: A list of transcript records matching the search criteria.
     """
+
     # Open the transcripts table
-    transcript_table = vectorstore.db.open_table("transcripts")
+    table_path_str = "transcripts"
+    transcript_table = vectorstore.db.open_table(table_path_str)
 
     # Build prefilter conditions
     prefilter_conditions = []
@@ -244,11 +260,17 @@ def get_transcripts(query: str,
     return _results
 
 
-if __name__ == "__main__":
-    vector = VectorStoreManager(store_name=r"C:\Users\cmazz\PycharmProjects\transcriber_machine\captain_logs")
-    # vector.db.open_table("transcripts")
-    results = get_transcripts(query="what is rupiders concern?", thread_id="Jane_Joe_20241004010814", prefilter=None, limit=10, vectorstore=vector)
-    print(results)
+# if __name__ == "__main__":
+
+    # print(project_root)
+#     vector = VectorStoreManager(store_name=r"C:\Users\cmazz\PycharmProjects\transcriber_machine\captain_logs")
+#     # vector.db.open_table("transcripts")
+#     results = get_transcripts(query="what is rupiders concern?",
+#                               thread_id="Claudio_Rupinder_20241007161408",
+#                               prefilter=None,
+#                               limit=10,
+#                               vectorstore=vector)
+#     print(results)
 
 
 # # Example transcript

@@ -11,12 +11,13 @@ from cryptography.fernet import Fernet
 from mutagen import File as MutagenFile  # Import Mutagen
 from tools.diarization import process_audio
 # from tools.txt_preprocessor import extract_speakers
-from agents.agent import notes_agent, chat_agent  # Assume chat_agent is defined
+from agents.agent import notes_agent, chat_agent  # Assume chat_agent is definedFF
 from storage.memory_manager import (
     VectorStoreManager,
     notes_to_table,
     transcript_to_table,
-    get_transcripts  # We'll assume it's imported if needed
+    get_transcripts,
+    storage_root
 )
 
 
@@ -57,7 +58,7 @@ def decrypt_data(encrypted_data: str) -> str:
 
 
 # Database setup
-engine = create_engine('sqlite:///creds.db')
+engine = create_engine(f'sqlite:///{str(storage_root)}/creds.db')
 Base = declarative_base()
 
 

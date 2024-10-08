@@ -18,13 +18,12 @@ os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_KEY"]
 os.environ["COHERE_KEY"] = st.secrets["COHERE_KEY"]
 os.environ["CO_API_KEY"] = st.secrets["COHERE_KEY"]
 
-async def task_breakdown(
-    _message: dict,
-    input_vars=None,
-    prompt: str = ASSISTANT,
-    pydantic_style: BaseModel = MeetingAnalysis,
-    temp=0.35,
-) -> dict:
+
+def task_breakdown_fail_over_response(_message: dict,
+                   input_vars=None,
+                   prompt: str = ASSISTANT,
+                   pydantic_style: BaseModel = MeetingAnalysis,
+                   temp=0.35) -> dict:
     """
     Analyze the sentiment of a document given a context.
     :param _message: The _message to analyze
@@ -34,9 +33,34 @@ async def task_breakdown(
     """
     if input_vars is None:
         input_vars = ["transcript"]
-    input_str = ""
+    input_str = ''
     for i in input_vars:
-        input_str += f"{{{i}}}"
+        input_str += f'{{{i}}}'
+    model = ChatOpenAI(temperature=temp, model="gpt-4o-mini", max_tokens=8000, api_key=KEY_AI)
+    parser = JsonOutputParser(pydantic_object=pydantic_style)
+    prompt_template = PromptTemplate(
+        template=f"{prompt}" + "\n{format_instructions}\n" + input_str,
+        input_variables=input_vars,
+        partial_variables={"format_instructions": parser.get_format_instructions()},
+    )
+    chain = prompt_template | model | parser
+
+    return chain.invoke(_message)
+
+
+async def task_breakdown(
+    _message: dict,
+    input_vars=None,
+    prompt: str = ASSISTANT,
+    pydantic_style: BaseModel = MeetingAnalysis,
+    temp=0.35,
+) -> dict:
+    """
+    Analyze the sentiment of a document given a context.
+    """
+    if input_vars is None:
+        input_vars = ["transcript"]
+    input_str = "".join(f"{{{i}}}" for i in input_vars)
     model = ChatOpenAI(
         temperature=temp, model="gpt-4o-mini", max_tokens=8000, api_key=KEY_AI
     )
@@ -51,9 +75,40 @@ async def task_breakdown(
     return await chain.ainvoke(_message)
 
 
+async def retry_task_breakdown(
+    _message: dict,
+    input_vars=None,
+    prompt: str = ASSISTANT,
+    pydantic_style: BaseModel = MeetingAnalysis,
+    temp=0.35,
+    retries=3,
+    delay=1,
+) -> dict:
+    """
+    Retry the task_breakdown function if it fails, with a delay between retries.
+    """
+    for attempt in range(retries):
+        try:
+            return await task_breakdown(
+                _message=_message,
+                input_vars=input_vars,
+                prompt=prompt,
+                pydantic_style=pydantic_style,
+                temp=temp,
+            )
+        except Exception as e:
+            if attempt < retries - 1:
+                print(
+                    f"Task failed, retrying in {delay} seconds... (Attempt {attempt + 1}/{retries})"
+                )
+                await asyncio.sleep(delay)
+            else:
+                print(f"Task failed after {retries} retries: {e}")
+                return None
+
+
 async def async_notes_agent(transcript_, background=""):
     try:
-        # Sample transcript from text file
         today = datetime.date.today().strftime("%Y-%m-%d")
         transcript_ = f"Today's Date: {today}\n" + transcript_
         task_args = {
@@ -63,25 +118,25 @@ async def async_notes_agent(transcript_, background=""):
         input_vars = ["transcript", "background"]
 
         tasks = [
-            task_breakdown(
+            retry_task_breakdown(
                 task_args,
                 input_vars,
                 pydantic_style=ConversationSummary,
                 prompt=CONVERSATION_SUMMARY,
             ),
-            task_breakdown(
+            retry_task_breakdown(
                 task_args,
                 input_vars,
                 pydantic_style=ActionItems,
                 prompt=ACTION_ITEMS,
             ),
-            task_breakdown(
+            retry_task_breakdown(
                 task_args,
                 input_vars,
                 pydantic_style=SentimentAnalysis,
                 prompt=SENTIMENT_ANALYSIS,
             ),
-            task_breakdown(
+            retry_task_breakdown(
                 task_args,
                 input_vars,
                 pydantic_style=KeyDecisions,
@@ -89,12 +144,44 @@ async def async_notes_agent(transcript_, background=""):
             ),
         ]
 
+        results_list = await asyncio.gather(*tasks)
+
         (
             summary,
             action_items,
             sentiment_analysis,
             potential_priorities,
-        ) = await asyncio.gather(*tasks)
+        ) = results_list
+
+        # check if any of the results are None
+        counter = 0
+        for result in results_list:
+            if result is None:
+                if counter == 0:
+                    summary = task_breakdown({"transcript": f"{transcript_}",
+                                          "background": f"{background}"},
+                                         ["transcript", "background"],
+                                         pydantic_style=ConversationSummary,
+                                         prompt=CONVERSATION_SUMMARY)
+                elif counter == 1:
+                    action_items = task_breakdown({"transcript": f"{transcript_}",
+                                       "background": f"{background}"},
+                                      ["transcript", "background"],
+                                      pydantic_style=ActionItems,
+                                      prompt=ACTION_ITEMS)
+                elif counter == 2:
+                    sentiment_analysis = task_breakdown({"transcript": f"{transcript_}",
+                                             "background": f"{background}"},
+                                            ["transcript", "background"],
+                                            pydantic_style=SentimentAnalysis,
+                                            prompt=SENTIMENT_ANALYSIS)
+                elif counter == 3:
+                    potential_priorities = task_breakdown({"transcript": f"{transcript_}",
+                                    "background": f"{background}"},
+                                    ["transcript", "background"],
+                                    pydantic_style=KeyDecisions,
+                                    prompt=KEY_DECISIONS)
+            counter += 1
 
         results = {
             "action_items": action_items,
@@ -112,7 +199,8 @@ async def async_notes_agent(transcript_, background=""):
 
 
 def notes_agent(transcript_, background=""):
-    return asyncio.run(async_notes_agent(transcript_, background))
+    vals = asyncio.run(async_notes_agent(transcript_, background))
+    return vals
 
 
 def chat_agent(user_input, context):
