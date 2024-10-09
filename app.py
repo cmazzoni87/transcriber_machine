@@ -20,17 +20,11 @@ from storage.memory_manager import (
     storage_root
 )
 
-
-os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_KEY"]
-os.environ["COHERE_KEY"] = st.secrets["COHERE_KEY"]
-os.environ["CO_API_KEY"] = st.secrets["COHERE_KEY"]
-
 # Import the copy to clipboard component
 from st_copy_to_clipboard import st_copy_to_clipboard as st_copy_button
 
 # Initialize lancedb
 lancedb = VectorStoreManager()
-
 
 # Encryption key retrieval
 def get_encryption_key():
@@ -40,14 +34,12 @@ def get_encryption_key():
         raise ValueError("ENCRYPTION_KEY not set in Streamlit secrets.")
     return key
 
-
 def encrypt_data(data: str) -> str:
     """Encrypts the data using the encryption key."""
     key = get_encryption_key()
     fernet = Fernet(key)
     encrypted_data = fernet.encrypt(data.encode())
     return encrypted_data.decode()
-
 
 def decrypt_data(encrypted_data: str) -> str:
     """Decrypts the data using the encryption key."""
@@ -56,11 +48,9 @@ def decrypt_data(encrypted_data: str) -> str:
     decrypted_data = fernet.decrypt(encrypted_data.encode())
     return decrypted_data.decode()
 
-
 # Database setup
 engine = create_engine(f'sqlite:///{str(storage_root)}/creds.db')
 Base = declarative_base()
-
 
 # Define the User model
 class User(Base):
@@ -84,13 +74,11 @@ class User(Base):
             return decrypt_data(self.encrypted_info)
         return None
 
-
 # Define the Thread model
 class Thread(Base):
     __tablename__ = 'thread'
     id = Column(Integer, primary_key=True)
     thread_id = Column(String(150), unique=True, nullable=False)
-
 
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
@@ -99,16 +87,13 @@ db_session = Session()
 # Allowed file extensions
 allowed_extensions = {'mp3', 'wav', 'flac', 'm4a'}
 
-
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
-
 
 def is_valid_email(email):
     """Simple regex check for email format."""
     regex = r'^\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
     return re.match(regex, email)
-
 
 def parse_transcript(transcript):
     """Parses the transcript and returns a dictionary of speakers and their lines."""
@@ -125,7 +110,6 @@ def parse_transcript(transcript):
             speakers[speaker]['lines'].append(text)
             speakers[speaker]['word_count'] += len(text.split())
     return speakers
-
 
 def replace_speaker_names(transcript, name_mapping):
     """Replaces speaker labels in the transcript with provided names."""
@@ -149,6 +133,12 @@ def get_all_thread_ids():
     """Retrieves all thread_ids from the database."""
     threads = db_session.query(Thread).all()
     return [thread.thread_id for thread in threads]
+
+# Helper function to check if a string is alphanumeric
+def is_alphanumeric(s):
+    """Check if the string is alphanumeric."""
+    s = s.replace(' ', '_')
+    return s.isalnum()
 
 def main():
     st.title('Audio Processing App')
@@ -315,11 +305,10 @@ def upload_page():
                 sample_lines = []
                 for line in data['lines'][:2]:
                     if len(line.split()) > 35:
-                        words = ' '.join(line.split()[:35]) + " ..."  # Display first 5 words
+                        words = ' '.join(line.split()[:35]) + " ..."  # Display first 35 words
                     else:
                         words = line
                     sample_lines.append(words)
-                # sample_lines = data['lines'][:2]  # Get first two lines
                 for line in sample_lines:
                     st.write(f'- {line}')
                 name = st.text_input(f'Name for {speaker}', key=f'name_input_{speaker}')
@@ -344,35 +333,66 @@ def upload_page():
         if not st.session_state.thread_selected:
             # Get available thread_ids
             available_thread_ids = get_all_thread_ids()
-            # Add an option for 'Generate New'
-            available_thread_ids = ['Generate New'] + available_thread_ids
 
-            # Let the user select a thread_id
-            st.subheader('Select Thread ID')
-            with st.form('thread_selection_form'):
+            # Add a selection for thread ID generation method
+            st.subheader('Select Thread ID Generation Method')
+            thread_id_method = st.radio(
+                'Choose how to set the Thread ID:',
+                ('Automatic Generation', 'Custom Input')
+            )
+
+            if thread_id_method == 'Automatic Generation':
+                available_thread_ids_extended = ['Generate New'] + available_thread_ids
                 selected_thread_id = st.selectbox(
                     'Select an existing thread ID or generate a new one:',
-                    available_thread_ids
+                    available_thread_ids_extended
                 )
-                submit_thread_selection = st.form_submit_button('Select')
-            if submit_thread_selection:
-                if selected_thread_id == 'Generate New':
-                    # Generate new thread_id using file creation time
-                    file_datetime = st.session_state.file_datetime
-                    timestamp = file_datetime.strftime("%Y%m%d%H%M%S")
-                    # Get participants' names
-                    participants = '_'.join([
-                        name.strip().replace(' ', '') for name in st.session_state.name_mapping.values() if name.strip()
-                    ])
-                    thread_id_to_use = f"{participants}_{timestamp}"
-                    # Store the new thread_id in the database
-                    store_thread_id(thread_id_to_use)
+                custom_thread_id = None  # Not used in this method
+            else:
+                selected_thread_id = None  # Not used in this method
+                custom_thread_id = st.text_input('Enter a custom Thread ID (alphanumeric only):')
+
+            if st.button('Select Thread ID'):
+                if thread_id_method == 'Automatic Generation':
+                    if selected_thread_id == 'Generate New':
+                        # Existing automatic thread_id generation logic
+                        file_datetime = st.session_state.file_datetime
+                        timestamp = file_datetime.strftime("%Y%m%d%H%M%S")
+                        participants = '_'.join([
+                            name.strip().replace(' ', '') for name in st.session_state.name_mapping.values() if name.strip()
+                        ])
+                        thread_id_to_use = f"{participants}_{timestamp}"
+                        # Ensure uniqueness (optional, as timestamp is likely unique)
+                        if db_session.query(Thread).filter_by(thread_id=thread_id_to_use).first():
+                            st.error('Automatically generated Thread ID already exists. Please try again.')
+                            return
+                        # Store the new thread_id in the database
+                        store_thread_id(thread_id_to_use)
+                        st.success(f'Automatically generated Thread ID "{thread_id_to_use}" has been set successfully!')
+                    else:
+                        # Use the selected existing thread_id
+                        thread_id_to_use = selected_thread_id
                 else:
-                    # Use the selected existing thread_id
-                    thread_id_to_use = selected_thread_id
+                    # Custom Thread ID path
+                    if not custom_thread_id:
+                        st.error('Please enter a Thread ID.')
+                        return
+                    if not is_alphanumeric(custom_thread_id):
+                        st.error('Thread ID must be alphanumeric without spaces or special characters.')
+                        return
+                    # Check uniqueness
+                    if db_session.query(Thread).filter_by(thread_id=custom_thread_id).first():
+                        st.error('Thread ID already exists. Please choose a different one.')
+                        return
+                    thread_id_to_use = custom_thread_id
+                    # Store the new custom thread_id in the database
+                    store_thread_id(thread_id_to_use)
+                    st.success(f'Custom Thread ID "{thread_id_to_use}" has been set successfully!')
+
                 # Generate session_id using file creation time
                 file_datetime = st.session_state.file_datetime
                 session_id = f"session_id_{file_datetime.strftime('%Y%m%d%H%M%S')}"
+
                 # Store the selected thread_id and session_id in session state
                 st.session_state.thread_id_to_use = thread_id_to_use
                 st.session_state.session_id = session_id

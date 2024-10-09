@@ -112,7 +112,6 @@ def table_search(query: str,
                  ) -> list:
 
     # search_type = 'NORMAL'  # HARD CODED
-
     if search_type == 'fts' and text_field is None:
         raise "Missing text field to perform Full-Text-Search"
 
@@ -131,7 +130,10 @@ def table_search(query: str,
         try:
             results = results.where(prefilter, prefilter=True).to_list()
         except Exception as e:
-            results = results.to_list()
+            try:
+                results = results.to_list()
+            except Exception as e:
+                results = []
 
     try:
         listed_results = results.to_list()
@@ -151,10 +153,6 @@ def notes_to_table(document: str,
                    image_tags: str | None,
                    bit_map_object: str | None,
                    vectorstore: Type[VectorStoreManager()]):
-
-    # time_stamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    # session_id = f'{session_id}_{time_stamp}'
-    # vectorstore = VectorStoreManager('captain_logs')
 
     response = client.embeddings.create(
         input=document,
