@@ -205,7 +205,7 @@ def notes_agent(transcript_, background=""):
 
 def chat_agent(user_input, context):
     try:
-        answer = task_breakdown({"question": f"{user_input}",
+        answer = task_breakdown_fail_over_response({"question": f"{user_input}",
                                  "context": f"{context}"},
                                 ["question", "context"],
                                 pydantic_style=AnswerWithSources,

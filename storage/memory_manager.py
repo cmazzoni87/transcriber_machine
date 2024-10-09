@@ -111,7 +111,7 @@ def table_search(query: str,
                  threshold: Optional[float | None] = 0.6,
                  ) -> list:
 
-    search_type = 'NORMAL'  # HARD CODED
+    # search_type = 'NORMAL'  # HARD CODED
 
     if search_type == 'fts' and text_field is None:
         raise "Missing text field to perform Full-Text-Search"
@@ -261,12 +261,11 @@ def get_transcripts(query: str,
 
 
 # if __name__ == "__main__":
-
-    # print(project_root)
+#
 #     vector = VectorStoreManager(store_name=r"C:\Users\cmazz\PycharmProjects\transcriber_machine\captain_logs")
 #     # vector.db.open_table("transcripts")
 #     results = get_transcripts(query="what is rupiders concern?",
-#                               thread_id="Claudio_Rupinder_20241007161408",
+#                               thread_id="Claudio_Rupinder_20241007231328",
 #                               prefilter=None,
 #                               limit=10,
 #                               vectorstore=vector)
