@@ -1,12 +1,12 @@
 from pydantic import BaseModel
 from agents import ASSISTANT, ACTION_ITEMS, SENTIMENT_ANALYSIS, CONVERSATION_SUMMARY, KEY_DECISIONS, QA_ANSWER
 from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from agents.structure import MeetingAnalysis, ConversationSummary, SentimentAnalysis, ActionItems, KeyDecisions, AnswerWithSources
 from tools.txt_preprocessor import json_to_markdown
-
-from time import sleep
+from agents.question_decomposition import ai_librarian
 import asyncio
 import datetime
 import streamlit as st
@@ -17,6 +17,15 @@ KEY_AI = st.secrets["OPENAI_KEY"]
 os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_KEY"]
 os.environ["COHERE_KEY"] = st.secrets["COHERE_KEY"]
 os.environ["CO_API_KEY"] = st.secrets["COHERE_KEY"]
+os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
+
+# llm_groq = ChatGroq(
+#     model="llama-3.1-70b-versatile",
+#     temperature=0.35,
+#     max_tokens=8000,
+#     timeout=None,
+#     max_retries=4,
+# )
 
 
 def task_breakdown_fail_over_response(_message: dict,
@@ -37,6 +46,7 @@ def task_breakdown_fail_over_response(_message: dict,
     for i in input_vars:
         input_str += f'{{{i}}}'
     model = ChatOpenAI(temperature=temp, model="gpt-4o-mini", max_tokens=8000, api_key=KEY_AI)
+    # model = ChatGroq(model="llama-3.1-70b-versatile", temperature=0.35, max_tokens=8000, timeout=None,  max_retries=4,)
     parser = JsonOutputParser(pydantic_object=pydantic_style)
     prompt_template = PromptTemplate(
         template=f"{prompt}" + "\n{format_instructions}\n" + input_str,
@@ -61,6 +71,7 @@ async def task_breakdown(
     if input_vars is None:
         input_vars = ["transcript"]
     input_str = "".join(f"{{{i}}}" for i in input_vars)
+    # model = ChatGroq(model="llama-3.1-70b-versatile", temperature=0.35, max_tokens=2000, timeout=None,  max_retries=4,)
     model = ChatOpenAI(
         temperature=temp, model="gpt-4o-mini", max_tokens=8000, api_key=KEY_AI
     )
@@ -189,8 +200,19 @@ async def async_notes_agent(transcript_, background=""):
             "conversation_summary": summary,
             "key_decisions": potential_priorities,
         }
-
-        markdown_result = json_to_markdown(results)
+        try:
+            markdown_result = json_to_markdown(results)
+        except Exception as e:
+            print(f"Error converting to markdown: {e}")
+            model = ChatGroq(model="llama-3.1-70b-versatile", temperature=0.05, max_tokens=5000, timeout=None,
+                             max_retries=4, )
+            prompt = f"""
+            Generate a report using the dictionary below, the keys are the titles and the values are the content.
+            Content should be formatted in markdown. Do not include any information that is not present in the dictionary.
+            Content:
+            {str(results)}
+            """
+            markdown_result = model.invoke(prompt).content
         return markdown_result
 
     except Exception as e:
@@ -203,10 +225,15 @@ def notes_agent(transcript_, background=""):
     return vals
 
 
-def chat_agent(user_input, context):
+def chat_agent(user_input, thread_id, filter_params=None):
+
     try:
+        context = ai_librarian(user_input, thread_id, filter_params)['results']
+        # if context is empty return None
+        if not context:
+            return None
         answer = task_breakdown_fail_over_response({"question": f"{user_input}",
-                                 "context": f"{context}"},
+                                 "context": f"{str(context)}"},
                                 ["question", "context"],
                                 pydantic_style=AnswerWithSources,
                                 prompt=QA_ANSWER,
@@ -214,17 +241,19 @@ def chat_agent(user_input, context):
         return answer
 
     except Exception as e:
-        print(f"Error processing file: {e}")
+        print(f"Error processing: {e}")
         return None
 
 
-# if __name__ == '__main__':
-#     path = r'C:\Users\cmazz\PycharmProjects\transcriber_machine\documents\upinder_transcript.txt'
-#     with open(path, 'r') as file:
-#         transcript = file.read()
-#     print(datetime.datetime.now())
-#     print(notes_agent(transcript))
-#     print(datetime.datetime.now())
+if __name__ == '__main__':
+    path = r'C:\Users\cmazz\PycharmProjects\transcriber_machine\documents\upinder_transcript.txt'
+    with open(path, 'r') as file:
+        transcript = file.read()
+    time_start = datetime.datetime.now()
+    print(notes_agent(transcript))
+    time_finish = datetime.datetime.now()
+    time_diff = time_finish - time_start
+    print("time to run notes_agent {}".format(time_diff.total_seconds()))
 
     # snippets = str([{
     #      'text': "Claudio: So would you say, would you describe the Amazon Q layer being used by power users. I've heard that before and I don't know if that is the correct term to use in this presentation. And I say that because he used the term advanced practitioners. So I just want to know if that is part of the language that we need to incorporate in this presentation.\nRupinder: So advanced practitioners is the bottom layer, right?\nClaudio: Any infrastructure?",
@@ -234,7 +263,8 @@ def chat_agent(user_input, context):
     #      'text': 'Rupinder: The top, I think, you know what we should do is if you want to talk about this, right, so you say that before we dive into bedrock, just want to level set the view and the vision we have in, in Amazon about generative AI stack.\nClaudio: Okay.',
     #      'speakers': 'Claudio, Rupinder'}])
     # question = "What are the three layers of the generative AI stack at AWS?"
-    # print(chat_agent(question, snippets))
+    # query = "what is causing the air issues in NYC?"
+    # thread_id = 'host_guest_20241011124110'
+    # print(chat_agent(query, thread_id))
 
 
-# {'answer': 'The three layers of the generative AI stack at AWS include: 1) the core infrastructure layer, which is focused on GPUs and resources for data scientists; 2) the advanced practitioners layer; and 3) the top layer, which is not explicitly detailed in the provided context.', 'references': [{'source': "Claudio: Okay. So actually I have a couple ideas. So, you know, generative AI is such a broad concept right now and it's so, and it's so quickly evolving. Here at AWS, we've decided that we want to break this down into three layers. One is the most like most core infrastructure layer, which is where GPU's and the resources come in. And it's very much catered for data scientists and domain .... Like my, I call it the elevator pitch. The idea is to press a button and by the time I get to.", 'speaker': 'Claudio'}, {'source': 'Rupinder: So advanced practitioners is the bottom layer, right?', 'speaker': 'Rupinder'}]}

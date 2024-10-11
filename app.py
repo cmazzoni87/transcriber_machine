@@ -10,21 +10,21 @@ from werkzeug.utils import secure_filename
 from cryptography.fernet import Fernet
 from mutagen import File as MutagenFile  # Import Mutagen
 from tools.diarization import process_audio
-# from tools.txt_preprocessor import extract_speakers
-from agents.agent import notes_agent, chat_agent  # Assume chat_agent is definedFF
+from agents.agent import notes_agent, chat_agent
 from storage.memory_manager import (
     VectorStoreManager,
     notes_to_table,
     transcript_to_table,
-    get_transcripts,
     storage_root
 )
 
 # Import the copy to clipboard component
 from st_copy_to_clipboard import st_copy_to_clipboard as st_copy_button
 
+
 # Initialize lancedb
-lancedb = VectorStoreManager()
+lancedb = VectorStoreManager(storage_root / "captain_logs")
+
 
 # Encryption key retrieval
 def get_encryption_key():
@@ -34,12 +34,14 @@ def get_encryption_key():
         raise ValueError("ENCRYPTION_KEY not set in Streamlit secrets.")
     return key
 
+
 def encrypt_data(data: str) -> str:
     """Encrypts the data using the encryption key."""
     key = get_encryption_key()
     fernet = Fernet(key)
     encrypted_data = fernet.encrypt(data.encode())
     return encrypted_data.decode()
+
 
 def decrypt_data(encrypted_data: str) -> str:
     """Decrypts the data using the encryption key."""
@@ -48,9 +50,11 @@ def decrypt_data(encrypted_data: str) -> str:
     decrypted_data = fernet.decrypt(encrypted_data.encode())
     return decrypted_data.decode()
 
+
 # Database setup
 engine = create_engine(f'sqlite:///{str(storage_root)}/creds.db')
 Base = declarative_base()
+
 
 # Define the User model
 class User(Base):
@@ -74,30 +78,37 @@ class User(Base):
             return decrypt_data(self.encrypted_info)
         return None
 
+
 # Define the Thread model
 class Thread(Base):
     __tablename__ = 'thread'
     id = Column(Integer, primary_key=True)
     thread_id = Column(String(150), unique=True, nullable=False)
 
+
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 db_session = Session()
 
+
 # Allowed file extensions
 allowed_extensions = {'mp3', 'wav', 'flac', 'm4a'}
 
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
+
 
 def is_valid_email(email):
     """Simple regex check for email format."""
     regex = r'^\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
     return re.match(regex, email)
 
+
 def parse_transcript(transcript):
     """Parses the transcript and returns a dictionary of speakers and their lines."""
     speaker_pattern = r'^(Speaker [A-Z][a-zA-Z0-9]*):\s*(.*)'
+    # speaker_pattern = r'^(Speaker [0-9]*):\s*(.*)'
     lines = transcript.strip().split('\n')
     speakers = {}
     for line in lines:
@@ -111,6 +122,7 @@ def parse_transcript(transcript):
             speakers[speaker]['word_count'] += len(text.split())
     return speakers
 
+
 def replace_speaker_names(transcript, name_mapping):
     """Replaces speaker labels in the transcript with provided names."""
     for original_name, new_name in name_mapping.items():
@@ -118,6 +130,7 @@ def replace_speaker_names(transcript, name_mapping):
             # Use word boundaries to ensure exact matches
             transcript = re.sub(rf'\b{re.escape(original_name)}:', f'{new_name}:', transcript)
     return transcript
+
 
 # Function to store a new thread_id
 def store_thread_id(thread_id):
@@ -128,17 +141,20 @@ def store_thread_id(thread_id):
         db_session.add(new_thread)
         db_session.commit()
 
+
 # Function to get all available thread_ids
 def get_all_thread_ids():
     """Retrieves all thread_ids from the database."""
     threads = db_session.query(Thread).all()
     return [thread.thread_id for thread in threads]
 
+
 # Helper function to check if a string is alphanumeric
 def is_alphanumeric(s):
     """Check if the string is alphanumeric."""
     s = s.replace(' ', '_')
     return s.isalnum()
+
 
 def main():
     st.title('Audio Processing App')
@@ -336,6 +352,14 @@ def upload_page():
 
             # Add a selection for thread ID generation method
             st.subheader('Select Thread ID Generation Method')
+
+            st.markdown("""
+            <div style="display: flex; align-items: center;">
+                <span style="font-size: 1.2em;">Thread ID</span>
+                <span style="font-size: 1em; margin-left: 5px;" title="A thread Id is a unique identifier that connects related conversations to one another">ℹ️</span>
+            </div>
+            """, unsafe_allow_html=True)
+
             thread_id_method = st.radio(
                 'Choose how to set the Thread ID:',
                 ('Automatic Generation', 'Custom Input')
@@ -500,11 +524,14 @@ def chatbot_page():
         st.warning('No threads available. Please upload and process audio files first.')
         return
 
-    selected_thread_id = st.sidebar.selectbox('Select Thread ID', available_thread_ids)
+    selected_thread_id = st.sidebar.selectbox('Select Thread ID (Conversations identifier ID)', available_thread_ids)
+
+    # Add the Data Type Dropdown
+    data_type_selection = st.selectbox('Select Data Type', ['Transcript', 'Report'])
 
     # Add widgets for search type, prefilter, keyword search, limit
-    search_type = 'hybrid'
-    if st.sidebar.checkbox('Use Full-Text Search (FTS)'):
+    search_type = 'semantic'
+    if st.sidebar.checkbox('Use Full-Text Search (Useful when searching for specific keywords)'):
         search_type = 'fts'
 
     prefilter = st.sidebar.text_input('Prefilter (SQL expression)')
@@ -528,34 +555,34 @@ def chatbot_page():
         if user_input.strip() == '':
             st.error('Please enter a question.')
         else:
-            # print parameters in the terminal
-            print(f"Selected Thread ID: {selected_thread_id}")
-            print(f"Search Type: {search_type}")
-            print(f"Prefilter: {prefilter}")
-            print(f"Keyword Search: {key_word_search}")
-            print(f"Limit: {limit}")
-            print(f"User Input: {user_input}")
-
-
-            # Retrieve transcripts using get_transcripts function
-            context_data = get_transcripts(
-                query=user_input,
-                thread_id=selected_thread_id,
-                prefilter=prefilter,
-                limit=limit,
-                vectorstore=lancedb,
-                search_type=search_type,
-            )
-
-            if not context_data:
-                st.error('No data found for the selected thread.')
-                return
-
+            # Print parameters in the terminal
+            # print(f"Selected Thread ID: {selected_thread_id}")
+            # print(f"Data Type: {data_type_selection}")
+            # print(f"Search Type: {search_type}")
+            # print(f"Filter results by: {prefilter}")
+            # print(f"Keyword Search: {key_word_search}")
+            # print(f"Top number of references: {limit}")
+            # print(f"User Input: {user_input}")
+            filer_params = {
+                'keyword': key_word_search,
+                'thread_id': selected_thread_id,
+                'prefilter': prefilter,
+                'limit': limit,
+                'search_type': search_type,
+                'search_source': data_type_selection
+            }
             # Generate response using chat_agent function
             with st.spinner('Generating response...'):
                 try:
-                    # chat_agent now returns a dictionary with 'answer' and 'references'
-                    chat_response = chat_agent(user_input, context_data)
+                    # Pass the data_type_selection to chat_agent
+                    chat_response = chat_agent(
+                        user_input,
+                        selected_thread_id,
+                        filer_params
+                    )
+                    if not chat_response:
+                        st.error('No relevant information found for the selected thread.')
+                        return
                     response = chat_response['answer']
                     references = chat_response.get('references', [])
                     # Append the conversation to the chat history

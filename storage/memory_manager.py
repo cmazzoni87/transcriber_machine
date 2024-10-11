@@ -111,18 +111,18 @@ def table_search(query: str,
                  threshold: Optional[float | None] = 0.6,
                  ) -> list:
 
-    # search_type = 'NORMAL'  # HARD CODED
     if search_type == 'fts' and text_field is None:
         raise "Missing text field to perform Full-Text-Search"
 
     reranker = RerankerFactory.get_reranker("cohere", api_key=api_keys.cohere_key)
-    _table.create_fts_index(text_field, replace=True)
+
     if search_type == 'hybrid':
+        _table.create_fts_index(text_field, replace=True)
         results = _table.search(query, query_type="hybrid").rerank(reranker=reranker).limit(limit)
 
     elif search_type == 'fts':
-        results = _table.search(query).limit(limit)
-
+        _table.create_fts_index(text_field, replace=True)
+        results = _table.search(query).select([text_field]).limit(limit)
     else:
         results = _table.search(query).limit(limit)
 
@@ -212,7 +212,8 @@ def get_transcripts(query: str,
                     limit: int,
                     vectorstore: VectorStoreManager,
                     search_type: str = 'hybrid',
-                    threshold: Optional[float] = 0.6) -> List[Dict[str, Any]]:
+                    threshold: Optional[float] = 0.6,
+                    table_path_str: str = 'transcript') -> List[Dict[str, Any]]:
     """
     Retrieves transcripts from the vectorstore using advanced search.
 
@@ -223,13 +224,14 @@ def get_transcripts(query: str,
         vectorstore (VectorStoreManager): The vectorstore manager instance.
         search_type (str): Type of search to perform ('hybrid' or 'fts').
         threshold (float, optional): Relevance score threshold for filtering results.
+        table_path_str (str): The path to the table in the vectorstore.
 
     Returns:
         List[Dict[str, Any]]: A list of transcript records matching the search criteria.
     """
 
     # Open the transcripts table
-    table_path_str = "transcripts"
+    # table_path_str = "transcripts"
     transcript_table = vectorstore.db.open_table(table_path_str)
 
     # Build prefilter conditions
@@ -258,46 +260,19 @@ def get_transcripts(query: str,
     return _results
 
 
-# if __name__ == "__main__":
-#
-#     vector = VectorStoreManager(store_name=r"C:\Users\cmazz\PycharmProjects\transcriber_machine\captain_logs")
-#     # vector.db.open_table("transcripts")
-#     results = get_transcripts(query="what is rupiders concern?",
-#                               thread_id="Claudio_Rupinder_20241007231328",
-#                               prefilter=None,
-#                               limit=10,
-#                               vectorstore=vector)
-#     print(results)
+if __name__ == "__main__":
+
+    vector = VectorStoreManager(store_name=r"C:\Users\cmazz\PycharmProjects\transcriber_machine\storage\captain_logs")
+    aa = vector.db.open_table("transcripts")
+    query = "what is causing the air issues in NYC?"
+    thread_id = 'Host_Guest_20241011130826'
+    aa.search(query).to_list()
+    results = get_transcripts(query=query,
+                              thread_id=thread_id,
+                              prefilter=None,
+                              limit=10,
+                              search_type="vector",
+                              vectorstore=vector)
+    print(results)
 
 
-# # Example transcript
-# transcript = """
-# Claudio: Is that I. Let me just share my screen. It's not finished, but I think that maybe we can flush it out today ,...... how do I want to set up. Need to take that?
-# Rupinder: No, that you will have to on a fire tread.
-# Claudio: Okay.
-# Rupinder: And I'll use this fire tread to tell him.
-# Claudio: So I think the agenda. Right, it's, it starts off with.
-# Rupinder: But let's go. Yeah, you have the very first line with the generative AI stack.
-# Claudio: Right, right. And then. Right. So technically the agenda and these kind of go hand in hand where I kind of go into a high level into how we define generative AI and then zoom in into bedrock and talk about how bedrock can be used for the application development.
-# Rupinder: But pitch it.
-# Claudio: Okay. So actually I have a couple ideas. So, you know, generative AI is such a broad concept right now and it's so, and it's so quickly evolving. Here at AWS, we've decided that we want to break this down into three layers. One is the most like most core infrastructure layer, which is where GPU's and the resources come in. And it's very much catered for data scientists and domain .... Like my, I call it the elevator pitch. The idea is to press a button and by the time I get to.
-# Rupinder: The top, I think, you know what we should do is if you want to talk about this, right, so you say that before we dive into bedrock, just want to level set the view and the vision we have in, in Amazon about generative AI stack.
-# Claudio: Okay.
-# Rupinder: And I mean, maybe you can make notes or you can kind of record kind of sometimes ramble on. Right. So, okay. Also, and we cater for the full stack of people who are building generative reals. So at the bottom layer is where we provide the infrastructure for fine tuning a model for running, for people who want to have more control over how they want the inferencing to happen.
-# Claudio: So would you say, would you describe the Amazon Q layer being used by power users. I've heard that before and I don't know if that is the correct term to use in this presentation. And I say that because he used the term advanced practitioners. So I just want to know if that is part of the language that we need to incorporate in this presentation.
-# Rupinder: So advanced practitioners is the bottom layer, right?
-# Claudio: Any infrastructure?
-# """
-#
-# txt = split_transcript(transcript, max_tokens=100, percent_threshold=0.6)
-# print(txt)
-#
-# transcript_to_table(transcript, "session_1", "thread_1", VectorStoreManager())
-
-#
-# lancedb_ = VectorStoreManager()
-# notes = lancedb_.db.open_table("work_notes")
-# transcripts = lancedb_.db.open_table("transcripts")
-#
-# print(table_search("Claudio", notes)[0]['text'])
-# print(table_search("Smokey the bear", transcripts)[0]['text'])
