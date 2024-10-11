@@ -152,6 +152,7 @@ As a Generative AI Solutions Architect assistant, your task is to identify any u
 
 QA_ANSWER = """
 Your task is to provide answers to specific questions using the relevant information from a list of dictionaries of transcript snippets containing part of the text of a transcript and the name of spekers.
+Always reference the sources in your response. For example "According to [Speaker Name], the answer is..."
 
 **Instructions:**
 - Read the question and the context provided in the transcript snippet.

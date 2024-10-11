@@ -213,7 +213,7 @@ def get_transcripts(query: str,
                     vectorstore: VectorStoreManager,
                     search_type: str = 'hybrid',
                     threshold: Optional[float] = 0.6,
-                    table_path_str: str = 'transcript') -> List[Dict[str, Any]]:
+                    table_path_str: str = 'transcripts') -> List[Dict[str, Any]]:
     """
     Retrieves transcripts from the vectorstore using advanced search.
 
@@ -232,7 +232,7 @@ def get_transcripts(query: str,
 
     # Open the transcripts table
     # table_path_str = "transcripts"
-    transcript_table = vectorstore.db.open_table(table_path_str)
+    transcript_table = vectorstore.db.open_table(table_path_str.lower())
 
     # Build prefilter conditions
     prefilter_conditions = []

@@ -8,14 +8,14 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from cryptography.fernet import Fernet
-from mutagen import File as MutagenFile  # Import Mutagen
-from tools.diarization import process_audio
+from mutagen import File as MutagenFile
+from tools.diarization import process_audio, text_to_speech
 from agents.agent import notes_agent, chat_agent
 from storage.memory_manager import (
     VectorStoreManager,
     notes_to_table,
     transcript_to_table,
-    storage_root
+    storage_root,
 )
 
 # Import the copy to clipboard component
@@ -527,7 +527,7 @@ def chatbot_page():
     selected_thread_id = st.sidebar.selectbox('Select Thread ID (Conversations identifier ID)', available_thread_ids)
 
     # Add the Data Type Dropdown
-    data_type_selection = st.selectbox('Select Data Type', ['Transcript', 'Report'])
+    data_type_selection = st.selectbox('Select Data Type', ['Transcripts', 'Report'])
 
     # Add widgets for search type, prefilter, keyword search, limit
     search_type = 'semantic'
@@ -569,7 +569,6 @@ def chatbot_page():
                 'prefilter': prefilter,
                 'limit': limit,
                 'search_type': search_type,
-                'search_source': data_type_selection
             }
             # Generate response using chat_agent function
             with st.spinner('Generating response...'):
@@ -578,6 +577,7 @@ def chatbot_page():
                     chat_response = chat_agent(
                         user_input,
                         selected_thread_id,
+                        data_type_selection,
                         filer_params
                     )
                     if not chat_response:
@@ -588,6 +588,7 @@ def chatbot_page():
                     # Append the conversation to the chat history
                     st.session_state.chat_history.append({'speaker': 'You', 'message': user_input})
                     st.session_state.chat_history.append({'speaker': 'Assistant', 'message': response, 'references': references})
+                    text_to_speech(chat_response['answer'])
                 except Exception as e:
                     st.error(f'Error generating response: {e}')
                     return

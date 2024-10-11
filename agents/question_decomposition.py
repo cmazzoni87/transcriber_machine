@@ -97,10 +97,10 @@ class State(TypedDict):
     results: List[str]
 
 
-def ai_librarian(question: str, thread_id: str, filters: dict) -> list:
+def ai_librarian(question: str, thread_id: str, data_type_selection: str, filters: dict) -> list:
     docs_state = []
     # Define a simple question decomposition function using Bedrock
-    search_source = filters.get("search_source", "transcripts")
+    search_source = data_type_selection
 
     def decompose_question(state: State) -> State:
         # Decompose the question using Bedrock's LLM
