@@ -511,6 +511,24 @@ def upload_page():
             st.session_state.file_datetime = None
             st.rerun()
 
+
+def autoplay_audio(file_path: str):
+    with open(file_path, "rb") as f:
+        data = f.read()
+        b64 = base64.b64encode(data).decode()
+        md = f"""
+            <audio controls autoplay="true">
+            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+            </audio>
+            """
+        st.markdown(
+            md,
+            unsafe_allow_html=True,
+        )
+
+
+autoplay_audio("local_audio.mp3")
+
 def chatbot_page():
     st.header('Chatbot Interface')
     if st.button('Logout'):
@@ -588,7 +606,9 @@ def chatbot_page():
                     # Append the conversation to the chat history
                     st.session_state.chat_history.append({'speaker': 'You', 'message': user_input})
                     st.session_state.chat_history.append({'speaker': 'Assistant', 'message': response, 'references': references})
-                    text_to_speech(chat_response['answer'])
+                    sound_path = text_to_speech(chat_response['answer'])
+                    st.write("# Auto Response")
+                    autoplay_audio(sound_path)
                 except Exception as e:
                     st.error(f'Error generating response: {e}')
                     return

@@ -195,18 +195,19 @@ def text_to_speech(response: str):
             input=response,
     ) as response:
         response.stream_to_file(speech_file_path)
-
+    return speech_file_path
 
 
 if __name__ == '__main__':
-    import time
-    start = time.time()
-    # audio_path = r"C:\Users\cmazz\Downloads\AB1_Discussion.m4a"
-    audio_path = r"C:\Users\cmazz\Downloads\20230607_me_canadian_wildfires.mp3"
-    result = process_audio(audio_path)
-    print(result)
-    end = time.time()
-    print(f"Time taken: {end - start} seconds")
+    text_to_speech("Guest: New York has some of the higher concentrations of particulate matter right now, reaching levels of 150 micrograms per meter cube, which is significantly higher than the annual average and the 24-hour average. This indicates that the air quality levels in NYC are currently unhealthy.")
+    # import time
+    # start = time.time()
+    # # audio_path = r"C:\Users\cmazz\Downloads\AB1_Discussion.m4a"
+    # audio_path = r"C:\Users\cmazz\Downloads\20230607_me_canadian_wildfires.mp3"
+    # result = process_audio(audio_path)
+    # print(result)
+    # end = time.time()
+    # print(f"Time taken: {end - start} seconds")
 
     # start = time.time()
     # # audio_path = r"C:\Users\cmazz\Downloads\AB1_Discussion.m4a"
