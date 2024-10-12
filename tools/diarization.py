@@ -9,9 +9,9 @@ from deepgram import (
     FileSource,
 )
 from openai import OpenAI
-import soundfile as sf
-import sounddevice as sd
-import io
+# import soundfile as sf
+# import sounddevice as sd
+# import io
 import re
 
 
@@ -163,25 +163,35 @@ def process_audio(file_path: str) -> str:
     except Exception as e:
         raise Exception(f"Failed to process transcription results: {e}")
 
+#
+# def text_to_speech(response: str):
+#     client = OpenAI()
+#     spoken_response = client.audio.speech.create(
+#         model="tts-1",
+#         voice="echo",
+#         response_format="opus",
+#         input=response
+#     )
+#
+#     buffer = io.BytesIO()
+#     for chunk in spoken_response.iter_bytes(chunk_size=4096):
+#         buffer.write(chunk)
+#     buffer.seek(0)
+#
+#     with sf.SoundFile(buffer, 'r') as sound_file:
+#         data = sound_file.read(dtype='int16')
+#         sd.play(data, sound_file.samplerate)
+#         sd.wait()
+
 
 def text_to_speech(response: str):
     client = OpenAI()
-    spoken_response = client.audio.speech.create(
-        model="tts-1",
-        voice="echo",
-        response_format="opus",
-        input=response
-    )
-
-    buffer = io.BytesIO()
-    for chunk in spoken_response.iter_bytes(chunk_size=4096):
-        buffer.write(chunk)
-    buffer.seek(0)
-
-    with sf.SoundFile(buffer, 'r') as sound_file:
-        data = sound_file.read(dtype='int16')
-        sd.play(data, sound_file.samplerate)
-        sd.wait()
+    with client.audio.speech.with_streaming_response.create(
+            model="tts-1",
+            voice="echo",
+            input=response,
+    ) as response:
+        response.stream_to_file("speech.mp3")
 
 
 
