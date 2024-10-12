@@ -183,15 +183,18 @@ def process_audio(file_path: str) -> str:
 #         sd.play(data, sound_file.samplerate)
 #         sd.wait()
 
+from pathlib import Path
+
 
 def text_to_speech(response: str):
     client = OpenAI()
+    speech_file_path = Path(__file__).parent / "speech.mp3"
     with client.audio.speech.with_streaming_response.create(
             model="tts-1",
             voice="echo",
             input=response,
     ) as response:
-        response.stream_to_file("speech.mp3")
+        response.stream_to_file(speech_file_path)
 
 
 
