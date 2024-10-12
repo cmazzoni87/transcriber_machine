@@ -527,8 +527,6 @@ def autoplay_audio(file_path: str):
         )
 
 
-autoplay_audio("local_audio.mp3")
-
 def chatbot_page():
     st.header('Chatbot Interface')
     if st.button('Logout'):
