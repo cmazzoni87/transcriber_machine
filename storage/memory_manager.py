@@ -12,6 +12,7 @@ from openai import OpenAI
 from tools.txt_preprocessor import split_transcript, extract_speakers
 import streamlit as st
 from pathlib import Path
+import time
 
 # get path to project root
 storage_root = Path(__file__).parent
@@ -172,11 +173,17 @@ def notes_to_table(document: str,
                "image_tags": image_tags,
                "bit_map_object": bit_map_object
                }
-
-    vectorstore.db.create_table("work_notes",
+    try:
+        vectorstore.db.create_table("work_notes",
                                 exist_ok=True,
                                 data=[payload],
                                 schema=DocumentSchema)
+    except:
+        vectorstore.db.create_table("work_notes",
+                                exist_ok=True,
+                                data=[payload]
+                                )
+
 
 
 def transcript_to_table(transcript: str,
@@ -200,10 +207,17 @@ def transcript_to_table(transcript: str,
                         "vector": embedded,
                         "entities": entities
                         })
-    vectorstore.db.create_table("transcripts",
+    try:
+        vectorstore.db.create_table("transcripts",
                                 exist_ok=True,
                                 data=payload,
                                 schema=TranscriptSchema)
+    except:
+        time.sleep(1)
+        vectorstore.db.create_table("transcripts",
+                                exist_ok=True,
+                                data=payload
+                                )
 
 
 def get_transcripts(query: str,
