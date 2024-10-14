@@ -175,15 +175,12 @@ def notes_to_table(document: str,
                }
     try:
         vectorstore.db.create_table("work_notes",
-                                exist_ok=True,
-                                data=[payload],
-                                schema=DocumentSchema)
+                                    exist_ok=False,
+                                    data=[payload],
+                                    schema=DocumentSchema)
     except:
-        vectorstore.db.create_table("work_notes",
-                                exist_ok=True,
-                                data=[payload]
-                                )
-
+        time.sleep(1)
+        vectorstore.db.open("work_notes").add([payload])
 
 
 def transcript_to_table(transcript: str,
@@ -209,15 +206,12 @@ def transcript_to_table(transcript: str,
                         })
     try:
         vectorstore.db.create_table("transcripts",
-                                exist_ok=True,
-                                data=payload,
-                                schema=TranscriptSchema)
+                                    exist_ok=False,
+                                    data=payload,
+                                    schema=TranscriptSchema)
     except:
         time.sleep(1)
-        vectorstore.db.create_table("transcripts",
-                                exist_ok=True,
-                                data=payload
-                                )
+        vectorstore.db.open_table("transcripts").add(payload)
 
 
 def get_transcripts(query: str,
@@ -279,7 +273,7 @@ if __name__ == "__main__":
     vector = VectorStoreManager(store_name=r"C:\Users\cmazz\PycharmProjects\transcriber_machine\storage\captain_logs")
     aa = vector.db.open_table("transcripts")
     query = "what is causing the air issues in NYC?"
-    thread_id = 'Host_Guest_20241011130826'
+    thread_id = 'Coast_Napolitano_20241014015125'  #'Host_Guest_20241011130826'
     aa.search(query).to_list()
     results = get_transcripts(query=query,
                               thread_id=thread_id,
