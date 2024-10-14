@@ -101,11 +101,16 @@ def ai_librarian(question: str, thread_id: str, data_type_selection: str, filter
     docs_state = []
     # Define a simple question decomposition function using Bedrock
     search_source = data_type_selection
+    if search_source == "Report":
+        search_source = "work_notes"
 
     def decompose_question(state: State) -> State:
-        # Decompose the question using Bedrock's LLM
-        payload = invoke_formatter({'question': state['input_question']}, decomposition, QuestionDecomposition,
-                                   llm_groq)
+        if search_source != "work_notes":
+            # Decompose the question using Bedrock's LLM
+            payload = invoke_formatter({'question': state['input_question']}, decomposition, QuestionDecomposition,
+                                       llm_groq)
+        else:
+            payload = {'sub_questions': [state['input_question']]}
 
         state['sub_questions'] = [q.strip() for q in payload['sub_questions'] if q.strip()]
         return state
