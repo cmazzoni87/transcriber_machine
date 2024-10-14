@@ -180,7 +180,7 @@ def notes_to_table(document: str,
                                     schema=DocumentSchema)
     except:
         time.sleep(1)
-        vectorstore.db.open("work_notes").add([payload])
+        vectorstore.db.open_table("work_notes").add([payload])
 
 
 def transcript_to_table(transcript: str,
