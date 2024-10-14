@@ -661,38 +661,104 @@ def chatbot_page():
                     response = chat_response['answer']
                     references = chat_response.get('references', [])
                     # Prepend the conversation to the chat history
-                    st.session_state.chat_history.insert(0, {'speaker': 'You', 'message': user_input})
                     st.session_state.chat_history.insert(0, {'speaker': 'Assistant', 'message': response, 'references': references})
+                    st.session_state.chat_history.insert(0, {'speaker': 'You', 'message': user_input})
                     sound_path = text_to_speech(response)
                     st.session_state.sound_path = sound_path  # Store in session_state
                 except Exception as e:
                     st.error(f'Error generating response: {e}')
                     return
 
+    # Define CSS styles for the chat bubbles
+    st.markdown(
+        """
+        <style>
+        /* Chat messages container */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+        }
+        /* User message bubble */
+        .user-message {
+            align-self: flex-start;
+            background-color: #2E2E2E; /* Dark gray */
+            color: white;
+            padding: 10px 15px;
+            border-radius: 15px;
+            margin: 5px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+        /* Assistant message bubble */
+        .assistant-message {
+            align-self: flex-end;
+            background-color: #404040; /* Slightly lighter dark gray */
+            color: white;
+            padding: 10px 15px;
+            border-radius: 15px;
+            margin: 5px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+        /* References styling */
+        .references {
+            align-self: flex-end;
+            color: #BFBFBF; /* Light gray */
+            font-size: 0.9em;
+            margin: 5px 5px 15px 5px;
+            max-width: 70%;
+            word-wrap: break-word;
+            text-align: right;
+        }
+        </style>
+        """, unsafe_allow_html=True
+    )
+
     # Display chat history with newest messages at the top
-    for chat_entry in st.session_state.chat_history:
-        speaker = chat_entry['speaker']
-        message = chat_entry['message']
-        if speaker == 'You':
-            st.markdown(f"**{speaker}:** {message}")
-        else:
-            st.markdown(f"**{speaker}:** {message}", unsafe_allow_html=True)
-            # If there are references, display them
+    chat_container = st.container()
+    with chat_container:
+        for chat_entry in st.session_state.chat_history:
+            speaker = chat_entry['speaker']
+            message = chat_entry['message']
             references = chat_entry.get('references', [])
-            if references:
-                st.markdown('---')
-                st.markdown('**Sources:**')
-                for ref in references:
-                    source_text = ref.get('source', '')
-                    source_speaker = ref.get('speaker', '')
-                    # Display the source text and speaker
-                    st.markdown(f"- **{source_speaker}**: {source_text}")
-        st.markdown("---")  # Separator between messages
+            if speaker == 'You':
+                st.markdown(
+                    f"""
+                    <div class="chat-container">
+                        <div class="user-message">
+                            {message}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    f"""
+                    <div class="chat-container">
+                        <div class="assistant-message">
+                            {message}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+                # If there are references, display them
+                if references:
+                    refs_html = '<div class="references"><em>Sources:</em><br/>'
+                    for ref in references:
+                        source_text = ref.get('source', '')
+                        source_speaker = ref.get('speaker', '')
+                        refs_html += f"<em>- {source_speaker}: {source_text}</em><br/>"
+                    refs_html += '</div>'
+                    st.markdown(refs_html, unsafe_allow_html=True)
 
     # Redisplay the audio player if sound_path exists
     if 'sound_path' in st.session_state and st.session_state.sound_path:
         st.write("# Auto Response")
         autoplay_audio(st.session_state.sound_path)
+
+
 
 
 if __name__ == '__main__':
