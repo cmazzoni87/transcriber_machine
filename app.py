@@ -10,8 +10,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from cryptography.fernet import Fernet
 from mutagen import File as MutagenFile
-
-# Import custom modules
 from tools.diarization import process_audio, text_to_speech
 from agents.agent import notes_agent, chat_agent
 from storage.memory_manager import (
@@ -20,13 +18,19 @@ from storage.memory_manager import (
     transcript_to_table,
     storage_root,
 )
+from storage.qcs_database_manager import download_databases, upload_databases, get_gcs_client
+from pathlib import Path
 
 # Import the copy to clipboard component
 from st_copy_to_clipboard import st_copy_to_clipboard as st_copy_button
 
+# Set your Google Cloud Storage bucket name
+GCS_BUCKET_NAME = 'meeting-notes-storage-1122987'  # Replace with your bucket name
 
-# Initialize lancedb
-lancedb = VectorStoreManager(storage_root / "captain_logs")
+# Initialize lancedb (will be re-initialized per user upon login)
+lancedb = None
+db_session = None  # <-- Add this line
+
 
 # Encryption key retrieval
 def get_encryption_key():
@@ -36,12 +40,14 @@ def get_encryption_key():
         raise ValueError("ENCRYPTION_KEY not set in Streamlit secrets.")
     return key
 
+
 def encrypt_data(data: str) -> str:
     """Encrypts the data using the encryption key."""
     key = get_encryption_key()
     fernet = Fernet(key)
     encrypted_data = fernet.encrypt(data.encode())
     return encrypted_data.decode()
+
 
 def decrypt_data(encrypted_data: str) -> str:
     """Decrypts the data using the encryption key."""
@@ -50,8 +56,10 @@ def decrypt_data(encrypted_data: str) -> str:
     decrypted_data = fernet.decrypt(encrypted_data.encode())
     return decrypted_data.decode()
 
+
 # Database setup
 Base = declarative_base()
+
 
 # Define the User model
 class User(Base):
@@ -60,6 +68,7 @@ class User(Base):
     username = Column(String(150), unique=True, nullable=False)
     password_hash = Column(String(150), nullable=False)
     encrypted_info = Column(String(500), nullable=True)
+    data_directory = Column(String(500), nullable=False)  # New field
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -75,11 +84,13 @@ class User(Base):
             return decrypt_data(self.encrypted_info)
         return None
 
+
 # Define the Thread model
 class Thread(Base):
     __tablename__ = 'thread'
     id = Column(Integer, primary_key=True)
     thread_id = Column(String(150), unique=True, nullable=False)
+
 
 # New Transcript model
 class Transcript(Base):
@@ -89,6 +100,7 @@ class Transcript(Base):
     timestamp = Column(DateTime, default=func.now(), unique=True)
     content = Column(Text, nullable=False)
 
+
 # New Report model
 class Report(Base):
     __tablename__ = 'report'
@@ -96,6 +108,7 @@ class Report(Base):
     thread_id = Column(String(150), nullable=False)
     timestamp = Column(DateTime, default=func.now(), unique=True)
     content = Column(Text, nullable=False)
+
 
 # New Speakers model
 class Speakers(Base):
@@ -105,26 +118,32 @@ class Speakers(Base):
     timestamp = Column(DateTime, default=func.now(), unique=True)
     speakers_list = Column(Text, nullable=False)  # Store as JSON string
 
-# Use a cached function to create the database session
+
+# Use a cached function to create the global database session for credentials
 @st.cache_resource
-def get_db_session():
-    engine = create_engine(f'sqlite:///{str(storage_root)}/creds.db')
+def get_global_db_session():
+    creds_db_path = storage_root / "creds.db"
+    engine = create_engine(f'sqlite:///{creds_db_path}')
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     return Session()
 
-db_session = get_db_session()
+
+global_db_session = get_global_db_session()
 
 # Allowed file extensions
 allowed_extensions = {'mp3', 'wav', 'flac', 'm4a'}
 
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
+
 
 def is_alphanumeric(s):
     """Check if the string is alphanumeric."""
     s = s.replace(' ', '_')
     return s.isalnum()
+
 
 def parse_transcript(transcript):
     """Parses the transcript and returns a dictionary of speakers and their lines."""
@@ -142,6 +161,7 @@ def parse_transcript(transcript):
             speakers[speaker]['word_count'] += len(text.split())
     return speakers
 
+
 def replace_speaker_names(transcript, name_mapping):
     """Replaces speaker labels in the transcript with provided names."""
     for original_name, new_name in name_mapping.items():
@@ -150,8 +170,9 @@ def replace_speaker_names(transcript, name_mapping):
             transcript = re.sub(rf'\b{re.escape(original_name)}:', f'{new_name}:', transcript)
     return transcript
 
+
 # Function to store a new thread_id
-def store_thread_id(thread_id):
+def store_thread_id(thread_id, db_session):
     """Stores a new thread_id in the database."""
     existing_thread = db_session.query(Thread).filter_by(thread_id=thread_id).first()
     if not existing_thread:
@@ -159,11 +180,66 @@ def store_thread_id(thread_id):
         db_session.add(new_thread)
         db_session.commit()
 
-# Function to get all available thread_ids
-def get_all_thread_ids():
+
+def get_all_thread_ids(db_session):
     """Retrieves all thread_ids from the database."""
+    if db_session is None:
+        st.error("Database session is not initialized.")
+        return []
     threads = db_session.query(Thread).all()
     return [thread.thread_id for thread in threads]
+
+
+def create_user_data_directory_in_cloud(user_data_directory):
+    """Creates a user data directory in the cloud."""
+    client = get_gcs_client()
+    bucket = client.bucket(GCS_BUCKET_NAME)
+    # Create an empty blob to represent the directory
+    blob = bucket.blob(user_data_directory)  #+ '/')
+    blob.upload_from_string('')
+    print(f'Created user data directory {user_data_directory} in cloud.')
+
+
+def initialize_user_databases(user_data_directory):
+    """Initializes empty databases in the user's data directory."""
+    # This function can be expanded to create initial database files if necessary
+    pass  # Currently does nothing; databases will be created upon first use
+
+
+def download_user_data_directory_from_cloud(user_data_directory, username):
+    """Downloads the user's data directory from the cloud to a local directory."""
+    local_user_data_directory = storage_root / username
+    local_user_data_directory.mkdir(parents=True, exist_ok=True)
+    download_databases(bucket_name=GCS_BUCKET_NAME,
+                       destination_folder=local_user_data_directory,
+                       prefix=user_data_directory)
+    return local_user_data_directory
+
+
+def upload_user_data_directory_to_cloud(user_data_directory, username):
+    """Uploads the user's data directory to the cloud."""
+    local_user_data_directory = storage_root / username
+    upload_databases(bucket_name=GCS_BUCKET_NAME, source_folder=local_user_data_directory, prefix='', overwrite=True)
+
+
+# In initialize_local_databases_for_user()
+def initialize_local_databases_for_user(username):
+    local_user_data_directory = storage_root / username
+    local_user_data_directory.mkdir(parents=True, exist_ok=True)
+
+    # For SQL database
+    user_db_path = local_user_data_directory / 'user_db.db'
+    engine = create_engine(f'sqlite:///{user_db_path}')
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    db_session = Session()
+    st.session_state['db_session'] = db_session
+
+    # For vector store
+    lancedb_path = local_user_data_directory / 'captain_logs'
+    lancedb = VectorStoreManager(str(lancedb_path))
+    st.session_state['lancedb'] = lancedb
+
 
 def main():
     st.title('Audio Processing App')
@@ -188,10 +264,15 @@ def main():
 def login_page():
     st.header('Login')
     username = st.text_input('Username', key='login_username_input')
+    # set a gobal variable for the username
     password = st.text_input('Password', type='password', key='login_password_input')
     if st.button('Login', key='login_button'):
-        user = db_session.query(User).filter_by(username=username).first()
+        user = global_db_session.query(User).filter_by(username=username).first()
         if user and user.check_password(password):
+            # Download the user's data directory from the cloud
+            local_user_data_directory = download_user_data_directory_from_cloud(user.data_directory, username)
+            # Initialize local databases with the user's data
+            initialize_local_databases_for_user(username)
             st.session_state.logged_in = True
             st.session_state.username = username
             st.success('Logged in successfully!')
@@ -207,21 +288,42 @@ def create_account_page():
     if st.button('Create Account', key='create_account_button'):
         if secret_key != os.getenv("ACCOUNT_CREATION_KEY"):
             st.error('Invalid secret key')
-        elif db_session.query(User).filter_by(username=username).first():
+        elif global_db_session.query(User).filter_by(username=username).first():
             st.error('Username already exists')
         else:
-            new_user = User(username=username)
+            # Generate a unique data directory for the user
+            user_data_directory = f"{username}/"  # Remove 'user_data/' prefix if present
+            # Create the directory on the cloud
+            create_user_data_directory_in_cloud(user_data_directory)
+            # Initialize empty databases in the user's directory
+            initialize_user_databases(user_data_directory)
+            # Create the user entry
+            new_user = User(username=username, data_directory=user_data_directory)
             new_user.set_password(password)
-            db_session.add(new_user)
-            db_session.commit()
+            global_db_session.add(new_user)
+            global_db_session.commit()
             st.success('Account created successfully!')
             st.rerun()
+
 
 def upload_page():
     st.header('Upload and Process Audio')
     if st.button('Logout', key='logout_button'):
         st.session_state.logged_in = False
+        st.session_state.pop('db_session', None)
+        st.session_state.pop('lancedb', None)
         st.rerun()
+
+    # Retrieve db_session and lancedb from session_state
+    db_session = st.session_state.get('db_session', None)
+    lancedb = st.session_state.get('lancedb', None)
+
+    if db_session is None or lancedb is None:
+        st.error("Database session is not initialized. Please log in again.")
+        return
+
+    # Get available thread_ids
+    available_thread_ids = get_all_thread_ids(db_session)
 
     context = st.text_area('Context (optional)', '', key='context_input')
     uploaded_images = st.file_uploader(
@@ -256,7 +358,11 @@ def upload_page():
         if allowed_file(uploaded_file.name):
             if st.button('Process Audio', key='process_audio_button'):
                 filename = secure_filename(uploaded_file.name)
-                file_path = os.path.join('uploads', filename)
+
+                uploads_dir = Path('uploads')
+                uploads_dir.mkdir(parents=True, exist_ok=True)
+                file_path = uploads_dir / filename
+
                 os.makedirs('uploads', exist_ok=True)
                 with open(file_path, 'wb') as f:
                     f.write(uploaded_file.getbuffer())
@@ -356,7 +462,7 @@ def upload_page():
         # Proceed with processing if thread is selected
         if not st.session_state.thread_selected:
             # Get available thread_ids
-            available_thread_ids = get_all_thread_ids()
+            available_thread_ids = get_all_thread_ids(db_session)
 
             # Add a selection for thread ID generation method
             st.subheader('Select Thread ID Generation Method')
@@ -401,7 +507,7 @@ def upload_page():
                             st.error('Automatically generated Thread ID already exists. Please try again.')
                             return
                         # Store the new thread_id in the database
-                        store_thread_id(thread_id_to_use)
+                        store_thread_id(thread_id_to_use, db_session)
                         st.success(f'Automatically generated Thread ID "{thread_id_to_use}" has been set successfully!')
                     else:
                         # Use the selected existing thread_id
@@ -420,7 +526,7 @@ def upload_page():
                         return
                     thread_id_to_use = custom_thread_id
                     # Store the new custom thread_id in the database
-                    store_thread_id(thread_id_to_use)
+                    store_thread_id(thread_id_to_use, db_session)
                     st.success(f'Custom Thread ID "{thread_id_to_use}" has been set successfully!')
 
                 # Generate session_id using file creation time
@@ -545,6 +651,7 @@ def upload_page():
             key='copy_report'
         )
         st.write('')
+        upload_user_data_directory_to_cloud(storage_root / st.session_state.username, st.session_state.username)
 
         if st.button('Reset for Next Upload', key='reset_button'):
             # Reset session state variables
@@ -574,16 +681,15 @@ def autoplay_audio(file_path: str):
             unsafe_allow_html=True,
         )
 
-def get_speakers_for_thread(thread_id):
-    # Query the Speakers table for the given thread_id
+def get_speakers_for_thread(thread_id, db_session):
+    """Retrieves speakers for a given thread_id from the database."""
     speakers_records = db_session.query(Speakers).filter_by(thread_id=thread_id).all()
     speakers_set = set()
     for record in speakers_records:
-        # Load the speakers list from the JSON string
         speakers_list = json.loads(record.speakers_list)
         speakers_set.update(speakers_list)
-    # Return a sorted list of unique speakers
     return sorted(list(speakers_set))
+
 
 def chatbot_page():
     st.header('Chatbot Interface')
@@ -591,8 +697,17 @@ def chatbot_page():
         st.session_state.logged_in = False
         st.rerun()
 
+    db_session = st.session_state.get('db_session', None)
+    # lancedb = st.session_state.get('lancedb', None)
+
+    # Ensure db_session is initialized
+    # global db_session
+    # if db_session is None:
+    #     st.error("Database session is not initialized. Please log in again.")
+    #     return
+
     # Get all available thread_ids
-    available_thread_ids = get_all_thread_ids()
+    available_thread_ids = get_all_thread_ids(db_session)
 
     if not available_thread_ids:
         st.warning('No threads available. Please upload and process audio files first.')
@@ -606,7 +721,7 @@ def chatbot_page():
     )
 
     # Fetch the list of speakers for the selected thread_id from the database
-    speakers = get_speakers_for_thread(selected_thread_id)
+    speakers = get_speakers_for_thread(selected_thread_id, db_session)
     speaker_options = ['All Speakers'] + speakers
 
     # Add the Data Type Dropdown to the sidebar
@@ -653,7 +768,8 @@ def chatbot_page():
                         user_input,
                         selected_thread_id,
                         data_type_selection,
-                        filer_params
+                        filer_params,
+                        st.session_state.username
                     )
                     if not chat_response:
                         st.error('No relevant information found for the selected thread.')

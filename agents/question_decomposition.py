@@ -10,8 +10,7 @@ from storage.memory_manager import get_transcripts, VectorStoreManager, storage_
 import os
 import streamlit as st
 
-store_name = storage_root / "captain_logs"
-vectorstore = VectorStoreManager(store_name=store_name)
+
 os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_KEY"]
 
 
@@ -97,7 +96,10 @@ class State(TypedDict):
     results: List[str]
 
 
-def ai_librarian(question: str, thread_id: str, data_type_selection: str, filters: dict) -> list:
+def ai_librarian(question: str, thread_id: str, data_type_selection: str, filters: dict, username=None) -> list:
+    store_name = storage_root / username / "captain_logs"
+    vectorstore = VectorStoreManager(store_name=store_name)
+
     docs_state = []
     # Define a simple question decomposition function using Bedrock
     search_source = data_type_selection
@@ -133,6 +135,7 @@ def ai_librarian(question: str, thread_id: str, data_type_selection: str, filter
         #     # join the list of strings into a single string
         #     docs = ["\n--------------------\n".join(docs)]
         # else:
+
         payload = get_transcripts(query=sub_question,
                                   thread_id=thread_id,
                                   prefilter=None,

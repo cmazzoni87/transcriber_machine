@@ -9,9 +9,6 @@ from deepgram import (
     FileSource,
 )
 from openai import OpenAI
-# import soundfile as sf
-# import sounddevice as sd
-# import io
 import re
 
 

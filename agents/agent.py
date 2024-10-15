@@ -225,10 +225,10 @@ def notes_agent(transcript_, background=""):
     return vals
 
 
-def chat_agent(user_input, thread_id, data_type_selection, filter_params=None):
+def chat_agent(user_input, thread_id, data_type_selection, filter_params=None, username=None):
 
     try:
-        context = ai_librarian(user_input, thread_id, data_type_selection, filter_params)['results']
+        context = ai_librarian(user_input, thread_id, data_type_selection, filter_params, username=username)['results']
         # if context is empty return None
         if not context:
             return None

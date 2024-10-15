@@ -15,7 +15,7 @@ from pathlib import Path
 import time
 
 # get path to project root
-storage_root = Path(__file__).parent
+storage_root = Path(__file__).parent / "user_data"
 
 
 os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_KEY"]
@@ -153,7 +153,7 @@ def notes_to_table(document: str,
                    entities: str,
                    image_tags: str | None,
                    bit_map_object: str | None,
-                   vectorstore: Type[VectorStoreManager()]):
+                   vectorstore: Type[Any]):
 
     response = client.embeddings.create(
         input=document,
@@ -186,7 +186,7 @@ def notes_to_table(document: str,
 def transcript_to_table(transcript: str,
                         session_id: str,
                         thread_id: str | None,
-                        vectorstore: Type[VectorStoreManager()]):
+                        vectorstore: Type[Any]):
 
     transcript_chunks = split_transcript(transcript)
     payload = []
@@ -268,19 +268,19 @@ def get_transcripts(query: str,
     return _results
 
 
-if __name__ == "__main__":
-
-    vector = VectorStoreManager(store_name=r"C:\Users\cmazz\PycharmProjects\transcriber_machine\storage\captain_logs")
-    aa = vector.db.open_table("transcripts")
-    query = "what is causing the air issues in NYC?"
-    thread_id = 'Coast_Napolitano_20241014015125'  #'Host_Guest_20241011130826'
-    aa.search(query).to_list()
-    results = get_transcripts(query=query,
-                              thread_id=thread_id,
-                              prefilter=None,
-                              limit=10,
-                              search_type="vector",
-                              vectorstore=vector)
-    print(results)
+# if __name__ == "__main__":
+#
+#     vector = VectorStoreManager(store_name=r"C:\Users\cmazz\PycharmProjects\transcriber_machine\storage\captain_logs")
+#     aa = vector.db.open_table("transcripts")
+#     query = "what is causing the air issues in NYC?"
+#     thread_id = 'Coast_Napolitano_20241014015125'  #'Host_Guest_20241011130826'
+#     aa.search(query).to_list()
+#     results = get_transcripts(query=query,
+#                               thread_id=thread_id,
+#                               prefilter=None,
+#                               limit=10,
+#                               search_type="vector",
+#                               vectorstore=vector)
+#     print(results)
 
 
