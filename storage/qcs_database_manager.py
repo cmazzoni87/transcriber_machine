@@ -59,21 +59,5 @@ def upload_databases(bucket_name, source_folder, prefix='databases/', overwrite=
 
             blob.upload_from_filename(local_path)
 
-# def main():
-#     GCS_BUCKET_NAME = 'meeting-notes-storage-1122987'
-#     from pathlib import Path
-#     # get the directory where this file is
-#     LOCAL_DB_FOLDER = str(Path(__file__).parent)
-#     # Download the databases before starting the app
-#     download_databases(bucket_name=GCS_BUCKET_NAME, destination_folder=LOCAL_DB_FOLDER)
-#     # upload_databases(bucket_name=GCS_BUCKET_NAME, source_folder=r'C:\Users\cmazz\PycharmProjects\transcriber_machine\documents')
 
-def get_gcs_client():
-    """Creates a Google Cloud Storage client using credentials from Streamlit secrets."""
-    # Load credentials from Streamlit secrets
-    service_account_info = st.secrets["gcp_service_account"]
-    credentials = service_account.Credentials.from_service_account_info(service_account_info)
-    client = storage.Client(credentials=credentials)
-    return client
 
-# get_gcs_client()

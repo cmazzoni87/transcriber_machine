@@ -145,7 +145,11 @@ def process_audio(file_path: str) -> str:
     try:
         response = deepgram.listen.rest.v("1").transcribe_file(payload, options)
     except Exception as e:
-        raise Exception(f"Deepgram API request failed: {e}")
+        try:
+            return process_audio_old(file_path)
+        except:
+            raise Exception(f"Deepgram API request failed: {e}")
+
     response = response.to_dict()
     # Check if the transcription was successful
     if not response.get('results') or not response['results'].get('channels'):
@@ -156,9 +160,12 @@ def process_audio(file_path: str) -> str:
         transcript = response['results']['channels'][0]['alternatives'][0]['paragraphs']['transcript']
         # remove new line if the new line does not start with the word Speaker
         return ensure_speaker_labels(transcript)
-
     except Exception as e:
-        raise Exception(f"Failed to process transcription results: {e}")
+        try:
+            return process_audio_old(file_path)
+        except:
+            raise Exception(f"Failed to process transcription results: {e}")
+
 
 #
 # def text_to_speech(response: str):
