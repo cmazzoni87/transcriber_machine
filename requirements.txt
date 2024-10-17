@@ -23,5 +23,8 @@ Werkzeug==2.2.3
 wordcloud==1.9.3
 tantivy
 deepgram-sdk==v3.7.3
+google-cloud-storage==2.18.2
+
+
 # soundfile==0.12.1
 # sounddevice==0.4.6
