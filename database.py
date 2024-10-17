@@ -9,7 +9,7 @@ from storage.memory_manager import VectorStoreManager, storage_root
 
 
 # Base = declarative_base()
-GCS_BUCKET_NAME = 'meeting-notes-storage-1122987'  # Replace with your bucket name
+GCS_BUCKET_NAME = 'meeting-notes-storage-1122987'
 
 
 def get_speakers_for_thread(thread_id, db_session):
@@ -83,7 +83,8 @@ def upload_user_data_directory_to_cloud(user_data_directory, username):
     """
     Uploads the user's data directory to the cloud.
     """
-    local_user_data_directory = storage_root / username
+    # local_user_data_directory = storage_root / username
+    local_user_data_directory = user_data_directory
     upload_databases(
         bucket_name=GCS_BUCKET_NAME,
         source_folder=local_user_data_directory,
