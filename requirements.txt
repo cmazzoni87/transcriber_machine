@@ -24,9 +24,6 @@ wordcloud==1.9.3
 tantivy
 deepgram-sdk==v3.7.3
 google-cloud-storage==2.18.2
-google
-gcsfs
-google-cloud
 google-auth
 # soundfile==0.12.1
 # sounddevice==0.4.6
