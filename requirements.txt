@@ -26,5 +26,8 @@ deepgram-sdk==v3.7.3
 google-cloud-storage==2.18.2
 google
 gcsfs
+google-cloud
+google-auth
+google-oauth2
 # soundfile==0.12.1
 # sounddevice==0.4.6
