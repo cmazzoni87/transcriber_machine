@@ -6,6 +6,7 @@ from cryptography.fernet import Fernet
 # Define your GCS bucket name here
 GCS_BUCKET_NAME = 'meeting-notes-storage-1122987'
 
+
 def initialize_globals():
     """
     Initialize global session state variables.

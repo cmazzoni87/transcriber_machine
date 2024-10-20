@@ -1,23 +1,18 @@
-# audio_processing.py
-
 import streamlit as st
-import os
-import re
 import datetime
 import base64
 import json
 from pathlib import Path
 from werkzeug.utils import secure_filename
 from utils import allowed_file, parse_transcript, replace_speaker_names, is_alphanumeric
-from storage.memory_manager import VectorStoreManager, notes_to_table, transcript_to_table, storage_root
-from storage.qcs_database_manager import download_databases, upload_databases, get_gcs_client
+from storage.memory_manager import notes_to_table, transcript_to_table
 from models import Thread, Transcript, Report, Speakers
 from database import get_all_thread_ids, store_thread_id, upload_user_data_directory_to_cloud
-from globals import GCS_BUCKET_NAME
-from tools.diarization import process_audio, text_to_speech
+from tools.diarization import process_audio
 from agents.agent import notes_agent
 from st_copy_to_clipboard import st_copy_to_clipboard as st_copy_button
 from mutagen import File as MutagenFile
+
 
 def upload_page():
     st.header('Upload and Process Audio')
@@ -357,7 +352,7 @@ def upload_page():
         )
         st.write('')
         # Upload the user data directory to the cloud
-        upload_user_data_directory_to_cloud(storage_root / st.session_state.username, st.session_state.username)
+        upload_user_data_directory_to_cloud(st.session_state.username)
 
         if st.button('Reset for Next Upload', key='reset_button'):
             # Reset session state variables

@@ -1,11 +1,9 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, func
+from sqlalchemy.ext.declarative import declarative_base
 from werkzeug.security import generate_password_hash, check_password_hash
 from globals import encrypt_data, decrypt_data
-from sqlalchemy.ext.declarative import declarative_base
-
 
 Base = declarative_base()
-
 
 class User(Base):
     __tablename__ = 'user'
@@ -54,3 +52,4 @@ class Speakers(Base):
     thread_id = Column(String(150), nullable=False)
     timestamp = Column(DateTime, default=func.now(), unique=True)
     speakers_list = Column(Text, nullable=False)  # Store as JSON string
+

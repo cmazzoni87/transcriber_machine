@@ -1,11 +1,8 @@
-# chatbot.py
-
 import streamlit as st
 from agents.agent import chat_agent
-from tools.diarization import process_audio, text_to_speech
+from tools.diarization import text_to_speech
 from utils import autoplay_audio
 from database import get_speakers_for_thread, get_all_thread_ids
-from st_copy_to_clipboard import st_copy_to_clipboard as st_copy_button
 
 
 def chatbot_page():

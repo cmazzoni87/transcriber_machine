@@ -4,6 +4,7 @@ from audio_processing import upload_page
 from chatbot import chatbot_page
 from globals import initialize_globals
 
+
 def main():
     # st.set_page_config(page_title='Audio Processing App', layout='wide')
     st.title('Audio Processing App')
