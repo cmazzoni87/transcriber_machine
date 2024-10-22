@@ -62,14 +62,13 @@ class KeyDecisions(BaseModel):
 
 
 class Source(BaseModel):
-    source: str = Field(description="The piece of text used to provide the answer")
-    speaker: str = Field(description="The speaker or author of the information")
+    source: str = Field(description="The piece of transcript used to provide the answer")
+    speaker: str = Field(description="The speaker or author of the transcript containing the relevant information")
 
 
 class AnswerWithSources(BaseModel):
     answer: str = Field(description="Answer to the question")
-    references: List[Source] = Field(description="Sources used to provide the answer")
-
+    references: List[Source] = Field(description="The speaker and the original body of the transcript used to provide the answer")
 
 
 class MeetingAnalysis(BaseModel):

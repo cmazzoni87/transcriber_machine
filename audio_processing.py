@@ -13,6 +13,8 @@ from agents.agent import notes_agent
 from st_copy_to_clipboard import st_copy_to_clipboard as st_copy_button
 from mutagen import File as MutagenFile
 
+# Import the mic_recorder from the streamlit_mic_recorder package
+from streamlit_mic_recorder import mic_recorder
 
 def upload_page():
     st.header('Upload and Process Audio')
@@ -29,6 +31,7 @@ def upload_page():
         st.error("Database session is not initialized. Please log in again.")
         return
 
+    st.write("**Note:** Files cannot be longer than 90 minutes.")
     context = st.text_area('Context (optional)', '', key='context_input')
     uploaded_images = st.file_uploader(
         'Upload images (optional)', type=['jpg', 'jpeg', 'png'], accept_multiple_files=True, key='image_uploader'
@@ -56,46 +59,124 @@ def upload_page():
     if 'markdown_result' not in st.session_state:
         st.session_state.markdown_result = None
 
-    allowed_extensions = {'mp3', 'wav', 'flac', 'm4a'}
-    uploaded_file = st.file_uploader('Choose an audio file', type=list(allowed_extensions), key='audio_uploader')
+    # Option for the user to choose between uploading or recording
+    st.subheader('Select Audio Input Method')
+    audio_input_method = st.radio(
+        'Choose how you want to provide the audio:',
+        ('Upload Audio File', 'Record Audio'),
+        key='audio_input_method_radio'
+    )
 
-    if uploaded_file is not None:
-        if allowed_file(uploaded_file.name):
-            if st.button('Process Audio', key='process_audio_button'):
-                filename = secure_filename(uploaded_file.name)
+    if audio_input_method == 'Upload Audio File':
+        allowed_extensions = {'mp3', 'wav', 'flac', 'm4a'}
+        st.write("**Note:** Files cannot be longer than 90 minutes.")
+        uploaded_file = st.file_uploader('Choose an audio file (Max 90 minutes)', type=list(allowed_extensions), key='audio_uploader')
 
+        if uploaded_file is not None:
+            if allowed_file(uploaded_file.name):
+                if st.button('Process Uploaded Audio', key='process_audio_button'):
+                    filename = secure_filename(uploaded_file.name)
+
+                    uploads_dir = Path('uploads')
+                    uploads_dir.mkdir(parents=True, exist_ok=True)
+                    file_path = uploads_dir / filename
+
+                    with open(file_path, 'wb') as f:
+                        f.write(uploaded_file.getbuffer())
+                    st.success('File uploaded successfully')
+
+                    # Check the duration of the audio file
+                    try:
+                        audio = MutagenFile(file_path)
+                        duration = audio.info.length  # Duration in seconds
+                        if duration > 90 * 60:
+                            st.error('Audio files cannot be longer than 90 minutes.')
+                            return
+                    except Exception as e:
+                        st.error(f'Error reading audio file: {e}')
+                        return
+
+                    # Try to get the creation time from the file's metadata
+                    try:
+                        audio = MutagenFile(file_path)
+                        file_datetime = None
+                        if audio is not None and audio.tags is not None:
+                            date_tags = ['date', 'creation_date', 'year', 'recording_date', 'TDRC', 'TDEN']
+                            for tag in date_tags:
+                                if tag in audio.tags:
+                                    date_str = str(audio.tags[tag][0])
+                                    try:
+                                        file_datetime = datetime.datetime.strptime(date_str, '%Y-%m-%d')
+                                        break
+                                    except ValueError:
+                                        try:
+                                            file_datetime = datetime.datetime.strptime(date_str, '%Y')
+                                            break
+                                        except ValueError:
+                                            pass
+                        if file_datetime is None:
+                            file_datetime = datetime.datetime.now()
+                    except Exception:
+                        file_datetime = datetime.datetime.now()
+
+                    st.session_state.file_datetime = file_datetime
+
+                    # Process the audio file and generate the transcript
+                    with st.spinner('Transcribing audio...'):
+                        try:
+                            transcript = process_audio(file_path)
+                            st.session_state.transcript = transcript
+                            st.success('Audio processed successfully')
+                        except Exception as e:
+                            st.error(f'Error processing audio: {e}')
+                            return
+
+                    # Parse the transcript to get speakers and their lines
+                    st.session_state.speakers = parse_transcript(st.session_state.transcript)
+                    st.session_state.names_confirmed = False  # Reset confirmation
+                    st.rerun()
+            else:
+                st.error('File type not allowed')
+
+    elif audio_input_method == 'Record Audio':
+        st.write("**Note:** Recordings cannot be longer than 90 minutes.")
+        st.write('Click the button below to start and stop recording.')
+        # Use mic_recorder to record audio
+        audio = mic_recorder(
+            start_prompt="Start Recording",
+            stop_prompt="Stop Recording",
+            format="wav",
+            key='mic_recorder'
+        )
+
+        if audio:
+            st.audio(audio['bytes'], format='audio/wav')
+            # Check the duration of the recorded audio
+            try:
+                from io import BytesIO
+                audio_bytes_io = BytesIO(audio['bytes'])
+                audio_file = MutagenFile(audio_bytes_io)
+                duration = audio_file.info.length  # Duration in seconds
+                if duration > 90 * 60:
+                    st.error('Recorded audio cannot be longer than 90 minutes.')
+                    return
+            except Exception as e:
+                st.error(f'Error reading recorded audio: {e}')
+                return
+
+            if st.button('Process Recorded Audio', key='process_recorded_audio_button'):
+                # Save the recorded audio to a file
+                filename = f"recorded_audio_{audio['id']}.wav"
                 uploads_dir = Path('uploads')
                 uploads_dir.mkdir(parents=True, exist_ok=True)
                 file_path = uploads_dir / filename
 
                 with open(file_path, 'wb') as f:
-                    f.write(uploaded_file.getbuffer())
-                st.success('File uploaded successfully')
+                    f.write(audio['bytes'])
+                st.success('Audio recorded successfully')
 
-                # Try to get the creation time from the file's metadata
-                try:
-                    audio = MutagenFile(file_path)
-                    file_datetime = None
-                    if audio is not None and audio.tags is not None:
-                        date_tags = ['date', 'creation_date', 'year', 'recording_date', 'TDRC', 'TDEN']
-                        for tag in date_tags:
-                            if tag in audio.tags:
-                                date_str = str(audio.tags[tag][0])
-                                try:
-                                    file_datetime = datetime.datetime.strptime(date_str, '%Y-%m-%d')
-                                    break
-                                except ValueError:
-                                    try:
-                                        file_datetime = datetime.datetime.strptime(date_str, '%Y')
-                                        break
-                                    except ValueError:
-                                        pass
-                    if file_datetime is None:
-                        file_datetime = datetime.datetime.now()
-                except Exception:
-                    file_datetime = datetime.datetime.now()
-
-                st.session_state.file_datetime = file_datetime
+                # Use current datetime for recorded audio
+                st.session_state.file_datetime = datetime.datetime.now()
 
                 # Process the audio file and generate the transcript
                 with st.spinner('Transcribing audio...'):
@@ -111,8 +192,6 @@ def upload_page():
                 st.session_state.speakers = parse_transcript(st.session_state.transcript)
                 st.session_state.names_confirmed = False  # Reset confirmation
                 st.rerun()
-        else:
-            st.error('File type not allowed')
 
     # After transcript is available and names are not yet confirmed
     if st.session_state.transcript and not st.session_state.names_confirmed:
@@ -148,18 +227,6 @@ def upload_page():
                 )
                 st.session_state.names_confirmed = True
                 st.rerun()
-
-    # After names are confirmed
-    if st.session_state.names_confirmed:
-        # Display the updated transcript with names
-        st.subheader('Updated Transcript with Names')
-        st.text_area('Transcript', st.session_state.transcript, height=300, key='updated_transcript_display')
-        st_copy_button(
-            st.session_state.transcript,
-            'Copy Transcript 📋',
-            after_copy_label='Copied! ✅',
-            key='copy_updated_transcript'
-        )
 
     # Proceed with processing if not done yet
     if st.session_state.names_confirmed and not st.session_state.processing_done:

@@ -225,10 +225,21 @@ def notes_agent(transcript_, background=""):
     return vals
 
 
+def check_sentence_is_similar(sentence_generated, sentence_original):
+    """
+    Check if the generated sentence is similar to the original sentence
+    """
+    sentence_generated = sentence_generated.lower()
+    sentence_original = sentence_original.lower()
+    if sentence_generated in sentence_original or sentence_original in sentence_generated:
+        return True
+    return False
+
+
 def chat_agent(user_input, thread_id, data_type_selection, filter_params=None, username=None):
 
     try:
-        context = ai_librarian(user_input, thread_id, data_type_selection, filter_params, username=username)['results']
+        context = ai_librarian(user_input, thread_id, data_type_selection, filter_params, username=username)
         # if context is empty return None
         if not context:
             return None
@@ -238,6 +249,7 @@ def chat_agent(user_input, thread_id, data_type_selection, filter_params=None, u
                                 pydantic_style=AnswerWithSources,
                                 prompt=QA_ANSWER,
                                 temp=0.05)
+
         return answer
 
     except Exception as e:
