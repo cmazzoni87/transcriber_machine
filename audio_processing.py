@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit as st
 import datetime
 import base64
 import json
@@ -227,6 +228,18 @@ def upload_page():
                 )
                 st.session_state.names_confirmed = True
                 st.rerun()
+
+    # After names are confirmed
+    if st.session_state.names_confirmed:
+        # Display the updated transcript with names
+        st.subheader('Updated Transcript with Names')
+        st.text_area('Transcript', st.session_state.transcript, height=300, key='updated_transcript_display')
+        st_copy_button(
+            st.session_state.transcript,
+            'Copy Transcript 📋',
+            after_copy_label='Copied! ✅',
+            key='copy_updated_transcript'
+        )
 
     # Proceed with processing if not done yet
     if st.session_state.names_confirmed and not st.session_state.processing_done:
